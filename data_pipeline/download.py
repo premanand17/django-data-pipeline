@@ -7,12 +7,17 @@ import csv
 import configparser
 import os
 import xml.etree.ElementTree as ET
+from builtins import classmethod
+import logging
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 
 def post_process(func):
     def inner(*args, **kwargs):
-        func(*args, **kwargs)
-        if 'section' in kwargs:
+        success = func(*args, **kwargs)
+        if success and 'section' in kwargs:
             section = kwargs['section']
             if 'post' in section:
                 post_func = getattr(globals()['PostProcess'], section['post'])
@@ -28,10 +33,10 @@ class Download:
             file_name = url.split('/')[-1]
         print(file_name)
         if url.startswith("ftp://"):
-            self._ftp(url, dir_path, file_name)
+            success = FTPDownload.download(url, dir_path, file_name)
         else:
-            self._http(url, dir_path, file_name)
-        print()
+            success = HTTPDownload.download(url, dir_path, file_name)
+        return success
 
     def download_ini(self, ini_file, dir_path):
         config = configparser.ConfigParser()
@@ -42,7 +47,6 @@ class Download:
 
     @post_process
     def _process_section(self, section=None, name=None, dir_path='.'):
-
         if 'location' in section:
             if 'files' in section:
                 files = section['files'].split(",")
@@ -70,15 +74,17 @@ class Download:
                     else:
                         self.download(row[1], dir_path)
 
-    def _ftp(self, url, dir_path, file_name):
-        o = urlparse(url)
-        ftp_host = ftputil.FTPHost(o.netloc, 'anonymous', '',
-                                   session_factory=ftplib.FTP)
-        size = ftp_host.path.getsize(o.path)
-        ftp_host.download(o.path, os.path.join(dir_path, file_name), callback=Monitor(size))
 
-    def _http(self, url, dir_path, file_name):
+class HTTPDownload:
+
+    @classmethod
+    def download(cls, url, dir_path, file_name):
         r = requests.get(url, stream=True)
+
+        if r.status_code != 200:
+            logger.error("response "+str(r.status_code)+": "+url)
+            return False
+
         monitor = Monitor(r.headers.get('content-length'))
         with open(os.path.join(dir_path, file_name), 'wb') as f:
             for chunk in r.iter_content(chunk_size=1024):
@@ -86,7 +92,31 @@ class Download:
                     f.write(chunk)
                     f.flush()
                     monitor(chunk)
-        return file_name
+        return True
+
+
+class FTPDownload:
+
+    @classmethod
+    def download(cls, url, dir_path, file_name):
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, 'anonymous', '',
+                                   session_factory=ftplib.FTP)
+        size = ftp_host.path.getsize(url_parse.path)
+        mon = Monitor(size)
+        ftp_host.download(url_parse.path, os.path.join(dir_path, file_name), callback=mon)
+
+        if mon.size_progress != size:
+            logger.error(file_name)
+            logger.error("download size: "+mon.size_progress+" server size: "+size)
+        return mon.size_progress == size
+
+
+class MartDownload:
+
+    @classmethod
+    def download(cls, url, dir_path, file_name):
+        pass
 
 
 class PostProcess:
