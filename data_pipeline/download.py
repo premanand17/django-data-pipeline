@@ -9,6 +9,7 @@ import os
 import xml.etree.ElementTree as ET
 from builtins import classmethod
 import logging
+import sys
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -41,14 +42,19 @@ class Download:
     def download_ini(self, ini_file, dir_path):
         config = configparser.ConfigParser()
         config.read(ini_file)
+        ini_path = os.path.dirname(os.path.abspath(ini_file))
         print(config.sections())
         for section_name in config.sections():
-            self._process_section(section=config[section_name], name=section_name, dir_path=dir_path)
+            self._process_section(section=config[section_name], name=section_name,
+                                  dir_path=dir_path, ini_path=ini_path)
 
     @post_process
-    def _process_section(self, section=None, name=None, dir_path='.'):
+    def _process_section(self, section=None, name=None, dir_path='.', ini_path=None):
         if 'location' in section:
-            if 'files' in section:
+            if 'type' in section and section['type'] == 'emsembl_mart':
+                MartDownload.download(section)
+                sys.exit()
+            elif 'files' in section:
                 files = section['files'].split(",")
                 for f in files:
                     self.download(section['location']+"/"+f.strip(), dir_path)
@@ -115,8 +121,29 @@ class FTPDownload:
 class MartDownload:
 
     @classmethod
-    def download(cls, url, dir_path, file_name):
-        pass
+    def download(cls, section):
+        taxonomy = section['taxonomy']
+        location = section['location']
+        attrs = section['attrs']
+        attrs_str = ''
+        for attr in attrs.split(','):
+            attrs_str += '''<Attribute name="%s"/>''' % attr.strip()
+
+        gene = 'ENSG00000134242'
+        query_filter = '<Filter name="ensembl_gene_id" value="%s"/>' % gene
+
+        urlTemplate = \
+            '%s?query=' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<!DOCTYPE Query>' \
+            '<Query virtualSchemaName="default" formatter="CSV" header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
+            '<Dataset name="%s" interface="default">%s%s' \
+            '</Dataset>' \
+            '</Query>'
+        martURL = urlTemplate % (location, taxonomy, query_filter, attrs_str)
+        r = requests.get(martURL, stream=True)
+        for line in r.iter_lines():
+            print (line)
 
 
 class PostProcess:
