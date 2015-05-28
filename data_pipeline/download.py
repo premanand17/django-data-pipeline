@@ -9,7 +9,6 @@ import os
 import xml.etree.ElementTree as ET
 from builtins import classmethod
 import logging
-import sys
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -29,14 +28,17 @@ def post_process(func):
 class Download:
     ''' Handle data file downloads '''
 
-    def download(self, url, dir_path, file_name=None):
+    def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
             file_name = url.split('/')[-1]
         print(file_name)
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name)
+        elif 'emsembl_mart' in kwargs:
+            success = MartDownload.download(url, dir_path, file_name, **kwargs)
         else:
             success = HTTPDownload.download(url, dir_path, file_name)
+        print()
         return success
 
     def download_ini(self, ini_file, dir_path):
@@ -52,8 +54,12 @@ class Download:
     def _process_section(self, section=None, name=None, dir_path='.', ini_path=None):
         if 'location' in section:
             if 'type' in section and section['type'] == 'emsembl_mart':
-                MartDownload.download(section)
-                sys.exit()
+                file_name = name
+                if 'output' in section:
+                    file_name = section['output']
+                self.download(section['location'], dir_path, file_name=file_name,
+                              tax=section['taxonomy'], attrs=section['attrs'],
+                              emsembl_mart=True)
             elif 'files' in section:
                 files = section['files'].split(",")
                 for f in files:
@@ -119,31 +125,52 @@ class FTPDownload:
 
 
 class MartDownload:
+    ''' Biomart webservice downloads. '''
 
     @classmethod
-    def download(cls, section):
-        taxonomy = section['taxonomy']
-        location = section['location']
-        attrs = section['attrs']
+    def download(cls, url, dir_path, file_name,
+                 query_filter='', tax='', attrs='', **kwargs):
+        '''
+        @type  url: str
+        @param url: The location of the mart service.
+        @type  dir_path: str
+        @param dir_path: Directory to write results to.
+        @type  file_name: integer
+        @param file_name: Output file name.
+        @type  query_filter: string
+        @keyword query_filter: Filter to be applied
+                  (e.g. <Filter name="ensembl_gene_id" value="ENSG00000134242"/>.
+        @type  tax: string
+        @keyword tax: Taxonomy
+        @type  attrs: string
+        @keyword attrs: Comma separated attributes
+        '''
         attrs_str = ''
         for attr in attrs.split(','):
             attrs_str += '''<Attribute name="%s"/>''' % attr.strip()
 
-        gene = 'ENSG00000134242'
-        query_filter = '<Filter name="ensembl_gene_id" value="%s"/>' % gene
-
-        urlTemplate = \
+        url_query = \
             '%s?query=' \
             '<?xml version="1.0" encoding="UTF-8"?>' \
             '<!DOCTYPE Query>' \
-            '<Query virtualSchemaName="default" formatter="CSV" header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
+            '<Query virtualSchemaName="default" formatter="TSV" header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
             '<Dataset name="%s" interface="default">%s%s' \
             '</Dataset>' \
             '</Query>'
-        martURL = urlTemplate % (location, taxonomy, query_filter, attrs_str)
-        r = requests.get(martURL, stream=True)
-        for line in r.iter_lines():
-            print (line)
+        mart_url = url_query % (url, tax, query_filter, attrs_str)
+        r = requests.get(mart_url, stream=True)
+
+        monitor = Monitor(4000000)
+        with open(os.path.join(dir_path, file_name), 'wb') as f:
+            for chunk in r.iter_content(chunk_size=1024):
+                if chunk:  # filter out keep-alive new chunks
+                    f.write(chunk)
+                    f.flush()
+                    monitor(chunk)
+        return True
+
+#         for line in r.iter_lines():
+#             print (line)
 
 
 class PostProcess:
