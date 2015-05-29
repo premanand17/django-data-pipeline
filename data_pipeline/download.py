@@ -1,13 +1,12 @@
+from urllib.parse import urlparse
+from builtins import classmethod
+import xml.etree.ElementTree as ET
 import requests
 import ftputil
-from urllib.parse import urlparse
 import ftplib
 import time
-import csv
 import configparser
 import os
-import xml.etree.ElementTree as ET
-from builtins import classmethod
 import logging
 
 # Get an instance of a logger
@@ -42,6 +41,7 @@ class Download:
         return success
 
     def download_ini(self, ini_file, dir_path):
+        ''' Download data defined in the ini file. '''
         config = configparser.ConfigParser()
         config.read(ini_file)
         ini_path = os.path.dirname(os.path.abspath(ini_file))
@@ -57,9 +57,14 @@ class Download:
                 file_name = name
                 if 'output' in section:
                     file_name = section['output']
+                query_filter = None
+                if 'query_filter' in section:
+                    query_filter = section['query_filter']
+                elif 'ensgene_filter' in section:
+                    query_filter = '<Filter name="ensembl_gene_id" value="%s"/>' % section['ensgene_filter']
                 self.download(section['location'], dir_path, file_name=file_name,
                               tax=section['taxonomy'], attrs=section['attrs'],
-                              emsembl_mart=True)
+                              query_filter=query_filter, emsembl_mart=True)
             elif 'files' in section:
                 files = section['files'].split(",")
                 for f in files:
@@ -71,28 +76,12 @@ class Download:
                 self.download(section['location']+"?"+section['http_params'],
                               dir_path, file_name=file_name)
 
-    def download_file(self, filename, dir_path):
-        with open(filename, 'r') as f:
-            reader = csv.reader(f, delimiter='\t')
-            for row in reader:
-                if len(row) > 1:
-                    if row[0].startswith("#"):
-                        continue
-
-                    if len(row) > 2:
-                        files = row[2].split(",")
-                        for f in files:
-                            self.download(row[1]+"/"+f.strip(), dir_path)
-                    else:
-                        self.download(row[1], dir_path)
-
 
 class HTTPDownload:
 
     @classmethod
     def download(cls, url, dir_path, file_name):
         r = requests.get(url, stream=True)
-
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
@@ -145,10 +134,7 @@ class MartDownload:
         @type  attrs: string
         @keyword attrs: Comma separated attributes
         '''
-        attrs_str = ''
-        for attr in attrs.split(','):
-            attrs_str += '''<Attribute name="%s"/>''' % attr.strip()
-
+        attrs_str = ''.join('<Attribute name="%s"/>' % a.strip() for a in attrs.split(','))
         url_query = \
             '%s?query=' \
             '<?xml version="1.0" encoding="UTF-8"?>' \
@@ -156,21 +142,8 @@ class MartDownload:
             '<Query virtualSchemaName="default" formatter="TSV" header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
             '<Dataset name="%s" interface="default">%s%s' \
             '</Dataset>' \
-            '</Query>'
-        mart_url = url_query % (url, tax, query_filter, attrs_str)
-        r = requests.get(mart_url, stream=True)
-
-        monitor = Monitor(4000000)
-        with open(os.path.join(dir_path, file_name), 'wb') as f:
-            for chunk in r.iter_content(chunk_size=1024):
-                if chunk:  # filter out keep-alive new chunks
-                    f.write(chunk)
-                    f.flush()
-                    monitor(chunk)
-        return True
-
-#         for line in r.iter_lines():
-#             print (line)
+            '</Query>' % (url, tax, query_filter, attrs_str)
+        return HTTPDownload.download(url_query, dir_path, file_name)
 
 
 class PostProcess:
@@ -207,17 +180,20 @@ class PostProcess:
 class Monitor:
     ''' Monitor download progress. '''
 
-    def __init__(self, size):
+    def __init__(self, size=None):
         if size is not None:
             self.size = int(size)
-        else:
-            self.size = 1000000
         self.size_progress = 0
         self.previous = 0
         self.start = time.time()
 
     def __call__(self, chunk):
         self.size_progress += len(chunk)
+
+        if not hasattr(self, 'size'):
+            print("\r[%s]" % self.size_progress, end="")
+            return
+
         percent_progress = int(self.size_progress/self.size * 100)
         if percent_progress != self.previous and percent_progress % 10 == 0:
             time_taken = time.time() - self.start
