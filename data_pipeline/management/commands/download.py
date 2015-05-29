@@ -14,17 +14,12 @@ class Command(BaseCommand):
                             dest='dir',
                             metavar="/download_path/",
                             help='Directory to store downloads.')
-        parser.add_argument('--input',
-                            dest='input',
-                            help='Input file defining downloads.')
         parser.add_argument('--ini',
                             dest='ini',
                             help='Input file defining downloads.')
 
     def handle(self, *args, **options):
-        if options['input']:
-            Download().download_file(options['input'], options['dir'])
-        elif options['ini']:
+        if options['ini']:
             Download().download_ini(options['ini'], options['dir'])
         else:
             Download().download(options['url'], options['dir'])
