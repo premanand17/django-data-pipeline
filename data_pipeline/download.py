@@ -42,16 +42,24 @@ class Download:
 
     def download_ini(self, ini_file, dir_path):
         ''' Download data defined in the ini file. '''
+
+        # check for ini file in data pipeline home
+        if not os.path.isfile(ini_file):
+            DOWNLOAD_BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+            tmp = os.path.join(DOWNLOAD_BASE_DIR, 'data_pipeline', ini_file)
+            if os.path.isfile(tmp):
+                ini_file = tmp
+
         config = configparser.ConfigParser()
         config.read(ini_file)
         ini_path = os.path.dirname(os.path.abspath(ini_file))
         print(config.sections())
         for section_name in config.sections():
-            self._process_section(section=config[section_name], name=section_name,
-                                  dir_path=dir_path, ini_path=ini_path)
+            self._process_ini_section(section=config[section_name], name=section_name,
+                                      dir_path=dir_path, ini_path=ini_path)
 
     @post_process
-    def _process_section(self, section=None, name=None, dir_path='.', ini_path=None):
+    def _process_ini_section(self, section=None, name=None, dir_path='.', ini_path=None):
         if 'location' in section:
             if 'type' in section and section['type'] == 'emsembl_mart':
                 file_name = name
