@@ -34,7 +34,6 @@ class Download:
             if file_name == '':
                 file_name = re.sub(r"[\/?\.:]", "", url)
 
-        print(file_name)
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name)
         elif 'emsembl_mart' in kwargs:
@@ -103,7 +102,7 @@ class HTTPDownload:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
 
-        monitor = Monitor(r.headers.get('content-length'))
+        monitor = Monitor(file_name, size=r.headers.get('content-length'))
         with open(os.path.join(dir_path, file_name), 'wb') as f:
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:  # filter out keep-alive new chunks
@@ -121,7 +120,7 @@ class FTPDownload:
         ftp_host = ftputil.FTPHost(url_parse.netloc, 'anonymous', '',
                                    session_factory=ftplib.FTP)
         size = ftp_host.path.getsize(url_parse.path)
-        mon = Monitor(size)
+        mon = Monitor(file_name, size=size)
         ftp_host.download(url_parse.path, os.path.join(dir_path, file_name), callback=mon)
 
         if mon.size_progress != size:
@@ -156,7 +155,8 @@ class MartDownload:
             '%s?query=' \
             '<?xml version="1.0" encoding="UTF-8"?>' \
             '<!DOCTYPE Query>' \
-            '<Query virtualSchemaName="default" formatter="TSV" header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
+            '<Query virtualSchemaName="default" formatter="TSV" ' \
+            'header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
             '<Dataset name="%s" interface="default">%s%s' \
             '</Dataset>' \
             '</Query>' % (url, tax, query_filter, attrs_str)
@@ -197,25 +197,27 @@ class PostProcess:
 class Monitor:
     ''' Monitor download progress. '''
 
-    def __init__(self, size=None):
+    def __init__(self, file_name, size=None):
         if size is not None:
             self.size = int(size)
         self.size_progress = 0
         self.previous = 0
         self.start = time.time()
+        self.file_name = file_name
+        print("%s" % file_name, end="", flush=True)
 
     def __call__(self, chunk):
         self.size_progress += len(chunk)
 
         if not hasattr(self, 'size'):
-            print("\r[%s]" % self.size_progress, end="")
+            print("\r[%s] %s" % (self.size_progress, self.file_name), end="", flush=True)
             return
 
         percent_progress = int(self.size_progress/self.size * 100)
         if percent_progress != self.previous and percent_progress % 10 == 0:
             time_taken = time.time() - self.start
             eta = (time_taken / self.size_progress) * (self.size - self.size_progress)
-            print("\r[%s%s] eta:%ss    " % ('=' * int(percent_progress/2),
+            print("\r[%s%s] eta:%ss  %s" % ('=' * int(percent_progress/2),
                                             ' ' * (50-int(percent_progress/2)),
-                                            str(int(eta))), end="")
+                                            str(int(eta)), self.file_name), end="", flush=True)
             self.previous = percent_progress
