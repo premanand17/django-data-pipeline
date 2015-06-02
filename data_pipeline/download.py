@@ -8,6 +8,7 @@ import time
 import configparser
 import os
 import logging
+import re
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -30,6 +31,9 @@ class Download:
     def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
             file_name = url.split('/')[-1]
+            if file_name == '':
+                file_name = re.sub(r"[\/?\.:]", "", url)
+
         print(file_name)
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name)
@@ -54,12 +58,16 @@ class Download:
         config.read(ini_file)
         ini_path = os.path.dirname(os.path.abspath(ini_file))
         print(config.sections())
+        success = False
         for section_name in config.sections():
-            self._process_ini_section(section=config[section_name], name=section_name,
-                                      dir_path=dir_path, ini_path=ini_path)
+            success = self._process_ini_section(section=config[section_name],
+                                                name=section_name,
+                                                dir_path=dir_path, ini_path=ini_path)
+        return success
 
     @post_process
     def _process_ini_section(self, section=None, name=None, dir_path='.', ini_path=None):
+        success = False
         if 'location' in section:
             if 'type' in section and section['type'] == 'emsembl_mart':
                 file_name = name
@@ -70,19 +78,20 @@ class Download:
                     query_filter = section['query_filter']
                 elif 'ensgene_filter' in section:
                     query_filter = '<Filter name="ensembl_gene_id" value="%s"/>' % section['ensgene_filter']
-                self.download(section['location'], dir_path, file_name=file_name,
-                              tax=section['taxonomy'], attrs=section['attrs'],
-                              query_filter=query_filter, emsembl_mart=True)
+                success = self.download(section['location'], dir_path, file_name=file_name,
+                                        tax=section['taxonomy'], attrs=section['attrs'],
+                                        query_filter=query_filter, emsembl_mart=True)
             elif 'files' in section:
                 files = section['files'].split(",")
                 for f in files:
-                    self.download(section['location']+"/"+f.strip(), dir_path)
+                    success = self.download(section['location']+"/"+f.strip(), dir_path)
             elif 'http_params' in section:
                 file_name = name
                 if 'output' in section:
                     file_name = section['output']
-                self.download(section['location']+"?"+section['http_params'],
-                              dir_path, file_name=file_name)
+                success = self.download(section['location']+"?"+section['http_params'],
+                                        dir_path, file_name=file_name)
+        return success
 
 
 class HTTPDownload:
