@@ -18,7 +18,7 @@ setup(
     url='http://github.com/D-I-L/django-data-pipeline',
     description='A data pipeline app.',
     long_description=open(os.path.join(ROOT, 'README.rst')).read(),
-    install_requires=["requests>=2.7.0", "Django>=1.8.2"],
+    install_requires=["requests>=2.7.0", "Django>=1.8.2", "ftputil>=3.2"],
     classifiers=[
         'Environment :: Web Environment',
         'Framework :: Django',
