@@ -3,17 +3,22 @@ from django.test import TestCase
 from django.core.management import call_command
 from data_pipeline.download import HTTPDownload, FTPDownload, MartDownload
 import os
+from django.utils.six import StringIO
 
 
 class DownloadTest(TestCase):
 
     def test_ini_file(self):
-        test_dir = os.path.dirname(__file__)
-        ini_file = os.path.join(test_dir, 'download.ini')
-        call_command('download', dir='/tmp', ini=ini_file)
+        ''' Test ini file downloads. '''
+        out = StringIO()
+        ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        call_command('download', dir='/tmp', ini=ini_file, stdout=out)
+        self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
 
     def test_file_cmd(self):
-        call_command('download', dir='/tmp', url='http://t1dbase.org')
+        out = StringIO()
+        call_command('download', dir='/tmp', url='http://t1dbase.org', stdout=out)
+        self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
 
     def test_http(self):
         ''' Test downloading over HTTP. '''
