@@ -30,9 +30,7 @@ class Download:
 
     def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
-            file_name = url.split('/')[-1]
-            if file_name == '':
-                file_name = re.sub(r"[\/?\.:]", "", url)
+            file_name = self.url_to_file_name(url)
 
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name)
@@ -91,6 +89,12 @@ class Download:
                 success = self.download(section['location']+"?"+section['http_params'],
                                         dir_path, file_name=file_name)
         return success
+
+    def url_to_file_name(self, url):
+        file_name = url.split('/')[-1]
+        if file_name == '':
+            file_name = re.sub(r"[\/?\.:]", "", url)
+        return file_name
 
 
 class HTTPDownload:
