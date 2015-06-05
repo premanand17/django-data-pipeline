@@ -16,14 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 def post_process(func):
-    def inner(*args, **kwargs):
+    ''' Used as a decorator to apply L{PostProcess} functions. '''
+    def wrapper(*args, **kwargs):
         success = func(*args, **kwargs)
         if success and 'section' in kwargs:
             section = kwargs['section']
             if 'post' in section:
                 post_func = getattr(globals()['PostProcess'], section['post'])
                 post_func(*args, **kwargs)
-    return inner
+    return wrapper
 
 
 class Download:
@@ -213,11 +214,11 @@ class Monitor:
             print("\r[%s] %s" % (self.size_progress, self.file_name), end="", flush=True)
             return
 
-        percent_progress = int(self.size_progress/self.size * 100)
-        if percent_progress != self.previous and percent_progress % 10 == 0:
+        progress = int(self.size_progress/self.size * 100)
+        if progress != self.previous and progress % 10 == 0:
             time_taken = time.time() - self.start
             eta = (time_taken / self.size_progress) * (self.size - self.size_progress)
-            print("\r[%s%s] eta:%ss  %s  " % ('=' * int(percent_progress/2),
-                                              ' ' * (50-int(percent_progress/2)),
+            print("\r[%s%s] eta:%ss  %s  " % ('=' * int(progress/2),
+                                              ' ' * (50-int(progress/2)),
                                               str(int(eta)), self.file_name), end="", flush=True)
-            self.previous = percent_progress
+            self.previous = progress
