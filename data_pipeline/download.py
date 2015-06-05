@@ -24,6 +24,7 @@ def post_process(func):
             if 'post' in section:
                 post_func = getattr(globals()['PostProcess'], section['post'])
                 post_func(*args, **kwargs)
+        return success
     return wrapper
 
 
