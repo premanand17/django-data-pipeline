@@ -7,6 +7,11 @@ import os
 
 class DownloadTest(TestCase):
 
+    def test_ini_file(self):
+        test_dir = os.path.dirname(__file__)
+        ini_file = os.path.join(test_dir, 'download.ini')
+        call_command('download', dir='/tmp', ini=ini_file)
+
     def test_file_cmd(self):
         call_command('download', dir='/tmp', url='http://t1dbase.org')
 
