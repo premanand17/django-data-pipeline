@@ -101,6 +101,9 @@ class HTTPDownload:
     def download(cls, url, dir_path, file_name):
         r = requests.get(url, stream=True)
         if r.status_code != 200:
+            print("XXXXXXXXXXXXXXXXXX")
+            print(url)
+            print(str(r.status_code))
             logger.error("response "+str(r.status_code)+": "+url)
             return False
 
