@@ -1,3 +1,4 @@
+''' Download Data Module '''
 from urllib.parse import urlparse
 from builtins import classmethod
 import xml.etree.ElementTree as ET
@@ -30,7 +31,7 @@ class Download:
 
     def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
-            file_name = self.url_to_file_name(url)
+            file_name = self._url_to_file_name(url)
 
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name)
@@ -90,14 +91,15 @@ class Download:
                                         dir_path, file_name=file_name)
         return success
 
-    def url_to_file_name(self, url):
-        file_name = url.split('/')[-1]
-        if file_name == '':
-            file_name = re.sub(r"[\/?\.:]", "", url)
-        return file_name
+    def _url_to_file_name(self, url):
+        name = url.split('/')[-1]
+        if name == '':
+            name = re.sub(r"[\/?\.:]", "", url)
+        return name
 
 
 class HTTPDownload:
+    ''' HTTP downloader. '''
 
     @classmethod
     def download(cls, url, dir_path, file_name):
@@ -117,6 +119,7 @@ class HTTPDownload:
 
 
 class FTPDownload:
+    ''' FTP downloader. '''
 
     @classmethod
     def download(cls, url, dir_path, file_name):
