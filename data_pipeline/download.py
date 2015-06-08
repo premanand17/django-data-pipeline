@@ -54,13 +54,23 @@ class Download:
             if os.path.isfile(tmp):
                 ini_file = tmp
 
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
         config.read(ini_file)
 
         success = False
         for section_name in config.sections():
+            self._inherit_section(section_name, config)
             success = self._parse_ini(section_name, dir_path=dir_path, section=config[section_name])
         return success
+
+    def _inherit_section(self, section_name, config):
+        ''' Add in parameters from another config section when a double colon
+        is found in the name. '''
+        if '::' in section_name:
+            inherit = section_name.split('::', maxsplit=1)[0]
+            if inherit in config:
+                for key in config[inherit]:
+                    config[section_name][key] = config[inherit][key]
 
     @post_process
     def _parse_ini(self, fname, dir_path='.', section=None):
