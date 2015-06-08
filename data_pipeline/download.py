@@ -1,3 +1,4 @@
+''' Download Data Module '''
 from urllib.parse import urlparse
 from builtins import classmethod
 import xml.etree.ElementTree as ET
@@ -15,14 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 def post_process(func):
-    def inner(*args, **kwargs):
+    ''' Used as a decorator to apply L{PostProcess} functions. '''
+    def wrapper(*args, **kwargs):
         success = func(*args, **kwargs)
         if success and 'section' in kwargs:
             section = kwargs['section']
             if 'post' in section:
                 post_func = getattr(globals()['PostProcess'], section['post'])
                 post_func(*args, **kwargs)
-    return inner
+        return success
+    return wrapper
 
 
 class Download:
@@ -30,9 +33,7 @@ class Download:
 
     def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
-            file_name = url.split('/')[-1]
-            if file_name == '':
-                file_name = re.sub(r"[\/?\.:]", "", url)
+            file_name = self._url_to_file_name(url)
 
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name)
@@ -55,45 +56,46 @@ class Download:
 
         config = configparser.ConfigParser()
         config.read(ini_file)
-        ini_path = os.path.dirname(os.path.abspath(ini_file))
-        print(config.sections())
+
         success = False
         for section_name in config.sections():
-            success = self._process_ini_section(section=config[section_name],
-                                                name=section_name,
-                                                dir_path=dir_path, ini_path=ini_path)
+            success = self._parse_ini(section_name, dir_path=dir_path, section=config[section_name])
         return success
 
     @post_process
-    def _process_ini_section(self, section=None, name=None, dir_path='.', ini_path=None):
+    def _parse_ini(self, fname, dir_path='.', section=None):
         success = False
+        if 'output' in section:
+            fname = section['output']
+
         if 'location' in section:
             if 'type' in section and section['type'] == 'emsembl_mart':
-                file_name = name
-                if 'output' in section:
-                    file_name = section['output']
-                query_filter = None
+                qfilter = None
                 if 'query_filter' in section:
-                    query_filter = section['query_filter']
+                    qfilter = section['query_filter']
                 elif 'ensgene_filter' in section:
-                    query_filter = '<Filter name="ensembl_gene_id" value="%s"/>' % section['ensgene_filter']
-                success = self.download(section['location'], dir_path, file_name=file_name,
+                    qfilter = '<Filter name="ensembl_gene_id" value="%s"/>' % section['ensgene_filter']
+                success = self.download(section['location'], dir_path, file_name=fname,
                                         tax=section['taxonomy'], attrs=section['attrs'],
-                                        query_filter=query_filter, emsembl_mart=True)
+                                        query_filter=qfilter, emsembl_mart=True)
             elif 'files' in section:
                 files = section['files'].split(",")
                 for f in files:
                     success = self.download(section['location']+"/"+f.strip(), dir_path)
             elif 'http_params' in section:
-                file_name = name
-                if 'output' in section:
-                    file_name = section['output']
                 success = self.download(section['location']+"?"+section['http_params'],
-                                        dir_path, file_name=file_name)
+                                        dir_path, file_name=fname)
         return success
+
+    def _url_to_file_name(self, url):
+        name = url.split('/')[-1]
+        if name == '':
+            name = re.sub(r"[\/?\.:]", "", url)
+        return name
 
 
 class HTTPDownload:
+    ''' HTTP downloader. '''
 
     @classmethod
     def download(cls, url, dir_path, file_name):
@@ -113,6 +115,7 @@ class HTTPDownload:
 
 
 class FTPDownload:
+    ''' FTP downloader. '''
 
     @classmethod
     def download(cls, url, dir_path, file_name):
@@ -169,27 +172,26 @@ class PostProcess:
     def zcat(cls, *args, **kwargs):
         ''' Combine a list of compressed files. '''
         section = kwargs['section']
-        outfile = section['output']
         dir_path = kwargs['dir_path']
+        out = os.path.join(kwargs['dir_path'], section['output'])
+
         files = section['files'].split(",")
-        with open(dir_path+"/"+outfile, 'wb') as outf:
+        with open(out, 'wb') as outf:
             for fname in files:
-                with open(dir_path+"/"+fname, 'rb') as infile:
+                with open(os.path.join(dir_path, fname), 'rb') as infile:
                     for line in infile:
                         outf.write(line)
-            os.remove(dir_path+"/"+fname)
+                os.remove(os.path.join(dir_path, fname))
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
-        section = kwargs['section']
-        outfile = section['output']
-        dir_path = kwargs['dir_path']
+        out = os.path.join(kwargs['dir_path'], kwargs['section']['output'])
 
-        tree = ET.parse(dir_path+"/"+outfile)
+        tree = ET.parse(out)
         idlist = tree.find("IdList")
         ids = list(idlist.iter("Id"))
-        os.remove(dir_path+"/"+outfile)
-        with open(dir_path+"/"+outfile, 'w') as outf:
+        os.remove(out)
+        with open(out, 'w') as outf:
             for i in ids:
                 outf.write(i.text+'\n')
 
@@ -213,11 +215,11 @@ class Monitor:
             print("\r[%s] %s" % (self.size_progress, self.file_name), end="", flush=True)
             return
 
-        percent_progress = int(self.size_progress/self.size * 100)
-        if percent_progress != self.previous and percent_progress % 10 == 0:
+        progress = int(self.size_progress/self.size * 100)
+        if progress != self.previous and progress % 10 == 0:
             time_taken = time.time() - self.start
             eta = (time_taken / self.size_progress) * (self.size - self.size_progress)
-            print("\r[%s%s] eta:%ss  %s" % ('=' * int(percent_progress/2),
-                                            ' ' * (50-int(percent_progress/2)),
-                                            str(int(eta)), self.file_name), end="", flush=True)
-            self.previous = percent_progress
+            print("\r[%s%s] eta:%ss  %s  " % ('=' * int(progress/2),
+                                              ' ' * (50-int(progress/2)),
+                                              str(int(eta)), self.file_name), end="", flush=True)
+            self.previous = progress

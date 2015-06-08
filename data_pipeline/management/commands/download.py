@@ -1,5 +1,5 @@
 ''' Command line tool to manage downloads. '''
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from data_pipeline.download import Download
 
 
@@ -20,6 +20,10 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options['ini']:
-            Download().download_ini(options['ini'], options['dir'])
+            if not options['dir']:
+                raise CommandError('--dir parameter not provided')
+            if Download().download_ini(options['ini'], options['dir']):
+                self.stdout.write("DOWNLOAD COMPLETE")
         else:
-            Download().download(options['url'], options['dir'])
+            if Download().download(options['url'], options['dir']):
+                self.stdout.write("DOWNLOAD COMPLETE")
