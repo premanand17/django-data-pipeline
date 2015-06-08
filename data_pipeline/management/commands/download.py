@@ -22,6 +22,8 @@ class Command(BaseCommand):
         if options['ini']:
             if not options['dir']:
                 raise CommandError('--dir parameter not provided')
-            Download().download_ini(options['ini'], options['dir'])
+            if Download().download_ini(options['ini'], options['dir']):
+                self.stdout.write("DOWNLOAD COMPLETE")
         else:
-            Download().download(options['url'], options['dir'])
+            if Download().download(options['url'], options['dir']):
+                self.stdout.write("DOWNLOAD COMPLETE")
