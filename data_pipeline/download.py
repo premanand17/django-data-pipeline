@@ -36,7 +36,7 @@ class Download:
             file_name = self._url_to_file_name(url)
 
         if url.startswith("ftp://"):
-            success = FTPDownload.download(url, dir_path, file_name)
+            success = FTPDownload.download(url, dir_path, file_name, **kwargs)
         elif 'emsembl_mart' in kwargs:
             success = MartDownload.download(url, dir_path, file_name, **kwargs)
         else:
@@ -54,13 +54,23 @@ class Download:
             if os.path.isfile(tmp):
                 ini_file = tmp
 
-        config = configparser.ConfigParser()
+        config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
         config.read(ini_file)
 
         success = False
         for section_name in config.sections():
+            self._inherit_section(section_name, config)
             success = self._parse_ini(section_name, dir_path=dir_path, section=config[section_name])
         return success
+
+    def _inherit_section(self, section_name, config):
+        ''' Add in parameters from another config section when a double colon
+        is found in the name. '''
+        if '::' in section_name:
+            inherit = section_name.split('::', maxsplit=1)[0]
+            if inherit in config:
+                for key in config[inherit]:
+                    config[section_name][key] = config[inherit][key]
 
     @post_process
     def _parse_ini(self, fname, dir_path='.', section=None):
@@ -99,7 +109,7 @@ class HTTPDownload:
 
     @classmethod
     def download(cls, url, dir_path, file_name):
-        r = requests.get(url, stream=True)
+        r = requests.get(url, stream=True, timeout=5)
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
@@ -113,14 +123,18 @@ class HTTPDownload:
                     monitor(chunk)
         return True
 
+    @classmethod
+    def status(cls, url):
+        return requests.get(url).status_code
+
 
 class FTPDownload:
     ''' FTP downloader. '''
 
     @classmethod
-    def download(cls, url, dir_path, file_name):
+    def download(cls, url, dir_path, file_name, username='anonymous', password=''):
         url_parse = urlparse(url)
-        ftp_host = ftputil.FTPHost(url_parse.netloc, 'anonymous', '',
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
                                    session_factory=ftplib.FTP)
         size = ftp_host.path.getsize(url_parse.path)
         mon = Monitor(file_name, size=size)
@@ -130,6 +144,21 @@ class FTPDownload:
             logger.error(file_name)
             logger.error("download size: "+mon.size_progress+" server size: "+size)
         return mon.size_progress == size
+
+    @classmethod
+    def mtime(cls, url, username='anonymous', password=''):
+        ''' Time of most recent content modification in seconds '''
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
+                                   session_factory=ftplib.FTP)
+        return getattr(ftp_host.stat(url_parse.path), 'st_mtime')
+
+    @classmethod
+    def exists(cls, url, username='anonymous', password=''):
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
+                                   session_factory=ftplib.FTP)
+        return ftp_host.path.exists(url_parse.path)
 
 
 class MartDownload:
