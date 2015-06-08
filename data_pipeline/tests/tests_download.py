@@ -34,6 +34,16 @@ class DownloadTest(TestCase):
         self.assertTrue(os.path.isfile(os.path.join('/tmp', 'README')), 'FTP test command')
         os.remove(out)
 
+    def test_ftp_exists(self):
+        ''' Test FTP exists. '''
+        self.assertTrue(FTPDownload.exists('ftp://ftp.ebi.ac.uk/'), 'FTP file/dir exists')
+        self.assertFalse(FTPDownload.exists('ftp://ftp.ebi.ac.uk/xxxx'), 'FTP file/dir exists')
+
+    def test_ftp_mtime(self):
+        ''' Test mtime from a file on a FTP server. '''
+        self.assertTrue(FTPDownload.mtime('ftp://ftp.ebi.ac.uk/pub/databases/embl/README') > 0,
+                        'FTP file/dir exists')
+
     def test_ftp(self):
         ''' Test downloading over FTP. '''
         self.assertTrue(FTPDownload.download('ftp://ftp.ebi.ac.uk/pub/databases/embl/README',

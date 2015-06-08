@@ -36,7 +36,7 @@ class Download:
             file_name = self._url_to_file_name(url)
 
         if url.startswith("ftp://"):
-            success = FTPDownload.download(url, dir_path, file_name)
+            success = FTPDownload.download(url, dir_path, file_name, **kwargs)
         elif 'emsembl_mart' in kwargs:
             success = MartDownload.download(url, dir_path, file_name, **kwargs)
         else:
@@ -109,7 +109,7 @@ class HTTPDownload:
 
     @classmethod
     def download(cls, url, dir_path, file_name):
-        r = requests.get(url, stream=True)
+        r = requests.get(url, stream=True, timeout=5)
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
@@ -123,14 +123,18 @@ class HTTPDownload:
                     monitor(chunk)
         return True
 
+    @classmethod
+    def status(cls, url):
+        return requests.get(url).status_code
+
 
 class FTPDownload:
     ''' FTP downloader. '''
 
     @classmethod
-    def download(cls, url, dir_path, file_name):
+    def download(cls, url, dir_path, file_name, username='anonymous', password=''):
         url_parse = urlparse(url)
-        ftp_host = ftputil.FTPHost(url_parse.netloc, 'anonymous', '',
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
                                    session_factory=ftplib.FTP)
         size = ftp_host.path.getsize(url_parse.path)
         mon = Monitor(file_name, size=size)
@@ -140,6 +144,21 @@ class FTPDownload:
             logger.error(file_name)
             logger.error("download size: "+mon.size_progress+" server size: "+size)
         return mon.size_progress == size
+
+    @classmethod
+    def mtime(cls, url, username='anonymous', password=''):
+        ''' Time of most recent content modification in seconds '''
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
+                                   session_factory=ftplib.FTP)
+        return getattr(ftp_host.stat(url_parse.path), 'st_mtime')
+
+    @classmethod
+    def exists(cls, url, username='anonymous', password=''):
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
+                                   session_factory=ftplib.FTP)
+        return ftp_host.path.exists(url_parse.path)
 
 
 class MartDownload:
