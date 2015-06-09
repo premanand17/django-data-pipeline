@@ -17,13 +17,19 @@ class Command(BaseCommand):
         parser.add_argument('--ini',
                             dest='ini',
                             help='Input file defining downloads.')
+        parser.add_argument('--download',
+                            dest='download',
+                            help='Download step',
+                            action="store_true")
 
     def handle(self, *args, **options):
-        if options['ini']:
-            if not options['dir']:
-                raise CommandError('--dir parameter not provided')
-            if Download().download_ini(options['ini'], options['dir']):
-                self.stdout.write("DOWNLOAD COMPLETE")
-        else:
-            if Download().download(options['url'], options['dir']):
-                self.stdout.write("DOWNLOAD COMPLETE")
+
+        if options['download']:
+            if options['ini']:
+                if not options['dir']:
+                    raise CommandError('--dir parameter not provided')
+                if Download().download_ini(options['ini'], options['dir']):
+                    self.stdout.write("DOWNLOAD COMPLETE")
+            else:
+                if Download().download(options['url'], options['dir']):
+                    self.stdout.write("DOWNLOAD COMPLETE")
