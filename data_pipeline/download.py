@@ -34,6 +34,8 @@ class Download:
     def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
             file_name = self._url_to_file_name(url)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
 
         if url.startswith("ftp://"):
             success = FTPDownload.download(url, dir_path, file_name, **kwargs)
@@ -44,7 +46,7 @@ class Download:
         print()
         return success
 
-    def download_ini(self, ini_file, dir_path):
+    def download_ini(self, ini_file, dir_path, sections=None):
         ''' Download data defined in the ini file. '''
 
         # check for ini file in data pipeline home
@@ -59,8 +61,12 @@ class Download:
 
         success = False
         for section_name in config.sections():
-            self._inherit_section(section_name, config)
-            success = self._parse_ini(section_name, dir_path=dir_path, section=config[section_name])
+            if sections is not None and section_name not in sections:
+                continue
+
+            section_dir_name = self._inherit_section(section_name, config)
+            section_path = os.path.join(dir_path, 'DOWNLOAD', section_dir_name)
+            success = self._parse_ini(section_name, dir_path=section_path, section=config[section_name])
         return success
 
     def _inherit_section(self, section_name, config):
@@ -71,6 +77,8 @@ class Download:
             if inherit in config:
                 for key in config[inherit]:
                     config[section_name][key] = config[inherit][key]
+            return inherit
+        return section_name
 
     @post_process
     def _parse_ini(self, fname, dir_path='.', section=None):
@@ -139,6 +147,7 @@ class FTPDownload:
         size = ftp_host.path.getsize(url_parse.path)
         mon = Monitor(file_name, size=size)
         ftp_host.download(url_parse.path, os.path.join(dir_path, file_name), callback=mon)
+        ftp_host.close()
 
         if mon.size_progress != size:
             logger.error(file_name)
