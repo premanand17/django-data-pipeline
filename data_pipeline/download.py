@@ -10,6 +10,7 @@ import configparser
 import os
 import logging
 import re
+from data_pipeline.management.helpers.pubs import Pubs
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ class Download:
         elif 'emsembl_mart' in kwargs:
             success = MartDownload.download(url, dir_path, file_name, **kwargs)
         else:
-            success = HTTPDownload.download(url, dir_path, file_name)
+            success = HTTPDownload.download(url, dir_path, file_name, **kwargs)
         print()
         return success
 
@@ -65,7 +66,7 @@ class Download:
                 continue
 
             section_dir_name = self._inherit_section(section_name, config)
-            section_path = os.path.join(dir_path, 'DOWNLOAD', section_dir_name)
+            section_path = os.path.join(dir_path, self.__class__.__name__.upper(), section_dir_name)
             success = self._parse_ini(section_name, dir_path=section_path, section=config[section_name])
         return success
 
@@ -116,19 +117,25 @@ class HTTPDownload:
     ''' HTTP downloader. '''
 
     @classmethod
-    def download(cls, url, dir_path, file_name):
-        r = requests.get(url, stream=True, timeout=5)
+    def download(cls, url, dir_path, file_name, append=False):
+        r = requests.get(url, stream=True, timeout=10)
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
 
         monitor = Monitor(file_name, size=r.headers.get('content-length'))
-        with open(os.path.join(dir_path, file_name), 'wb') as f:
+        if append:
+            access = 'ab'
+        else:
+            access = 'wb'
+
+        with open(os.path.join(dir_path, file_name), access) as f:
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:  # filter out keep-alive new chunks
                     f.write(chunk)
                     f.flush()
                     monitor(chunk)
+        r.close()
         return True
 
     @classmethod
@@ -228,10 +235,9 @@ class PostProcess:
         tree = ET.parse(out)
         idlist = tree.find("IdList")
         ids = list(idlist.iter("Id"))
-        os.remove(out)
-        with open(out, 'w') as outf:
-            for i in ids:
-                outf.write(i.text+'\n')
+
+        pmids = [i.text for i in ids]
+        Pubs.fetch_details(pmids, out + '.json')
 
 
 class Monitor:
