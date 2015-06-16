@@ -1,7 +1,10 @@
+''' Used to fetch publication details from NCBI and generate a JSON. '''
+from data_pipeline.management.helpers.exceptions import PublicationDownloadError
 import json
 import requests
 import xml.etree.ElementTree as ET
 import logging
+import re
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -13,6 +16,11 @@ class Pubs():
     def fetch_details(cls, pmids, filename):
         ''' Given a list of PMIDs fetch their details from eutils.
         http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi??db=pubmed&retmode=xml&id=<PMIDS>
+        Produces a JSON file containing the publications mapping and documents.
+        {
+          "mapping": {"properties": {...}},
+          "docs": [...]
+        }
         '''
         chunkSize = 450
         count = 0
@@ -20,12 +28,12 @@ class Pubs():
             "PMID": {"type": "integer"},
             "journal": {"type": "string"},
             "title": {"type": "string"},
-            "date": {"type": "string", "index": "not_analyzed"},
+            "date": {"type": "date"},
             "authors": {"type": "object"},
-            "abstract": {"type": "string", "index": "no"}
+            "abstract": {"type": "string"}
                    }
 
-#         pmids = [25905392, 23369186, 24947582]
+#         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448]
         with open(filename, mode='w', encoding='utf-8') as f:
             f.write('{"mapping": ')
             f.write(json.dumps({"properties": mapping}))
@@ -41,21 +49,21 @@ class Pubs():
                 pubmeds = tree.findall("PubmedArticle") + tree.findall("PubmedBookArticle")
                 for pubmed in pubmeds:
                     pub = pubmed.find('MedlineCitation')
-                    pub_data = pubmed.find('PubmedData')
                     if pub is None:
                         pub = pubmed.find('BookDocument')
                     if count > 0:
                         f.write(',\n')
 
                     pub_obj = Pubs._parse_pubmed_record(pub)
-
-                    if pub_data is not None:
-                        Pubs.get_date_from_pubmeddate(pub_obj, pub_data)
                     f.write(json.dumps(pub_obj))
                     count += 1
 
             f.write('\n]}')
         logger.debug("No. publications downloaded "+str(count))
+        if count != len(pmids):
+            msg = "No. publications does not match the number of requested PMIDs ="+len(pmids)
+            logger.error(msg)
+            raise PublicationDownloadError(msg)
 
     @classmethod
     def _parse_pubmed_record(cls, pub):
@@ -68,6 +76,7 @@ class Pubs():
             authors = article.find('AuthorList')
             Pubs.get_authors(pub_obj, authors, pmid)
             Pubs.get_abstract(pub_obj, article, pmid)
+
             journal = article.find('Journal')
             try:
                 pub_obj['journal'] = journal.find('ISOAbbreviation').text
@@ -75,18 +84,23 @@ class Pubs():
                 pub_obj['journal'] = journal.find('Title').text
 
             pub_date = journal.find('JournalIssue').find('PubDate')
-            pub_obj['date'] = Pubs.get_date(pub_date)
+            article_date = article.find('ArticleDate')
+            if article_date is not None:
+                pub_date = article_date
+            Pubs.get_date(pub_obj, pub_date)
         elif pub.find('Book') is not None:
-            book = pub.find('Book')
             pub_obj['title'] = pub.find('ArticleTitle').text
-            authors = book.find('AuthorList')
+            authors = pub.find('AuthorList')
             Pubs.get_authors(pub_obj, authors, pmid)
             Pubs.get_abstract(pub_obj, pub, pmid)
+            pub_date = pub.find('ContributionDate')
+            Pubs.get_date(pub_obj, pub_date)
 
         return pub_obj
 
     @classmethod
     def get_abstract(cls, pub_obj, article, pmid):
+        ''' Add the abastract to the publication object. '''
         try:
             texts = article.find('Abstract').findall('AbstractText')
             abstract = ''
@@ -104,6 +118,7 @@ class Pubs():
 
     @classmethod
     def get_authors(cls, pub_obj, authors, pmid):
+        ''' Add the author list to the publication object. '''
         authors_arr = []
         try:
             for author in authors:
@@ -121,27 +136,63 @@ class Pubs():
         except TypeError:
             logger.warn('No authors found for PMID:'+pmid.text)
 
-    @classmethod
-    def get_date_from_pubmeddate(cls, pub_obj, pub_date):
+    # month mappings
+    MONTHS = {'jan': '01',
+              'feb': '02',
+              'mar': '03',
+              'apr': '04',
+              'may': '05',
+              'jun': '06',
+              'jul': '07',
+              'aug': '08',
+              'sep': '09',
+              'oct': '10',
+              'nov': '11',
+              'dec': '12',
+              'sum': '06', 'summer': '06',
+              'win': '12', 'winter': '12',
+              'spr': '03', 'spring': '03',
+              'fal': '09', 'fall': '09',
+              'aut': '09', 'autumn': '09'}
 
-        history = pub_date.find('History')
-        if history is not None:
-            pdates = history.findall('PubMedPubDate')
-            for pdate in pdates:
-                if hasattr(pdate, 'PubStatus'):
-                    if getattr(pdate, 'PubStatus') == 'accepted':
-                        pub_obj['date'] = pdate.find('Year') + pdate.find('Month') + pdate.find('Day')
-                        return
-
     @classmethod
-    def get_date(cls, pub_date):
+    def get_date(cls, pub_obj, pub_date):
+        ''' Get the date and save to pub_obj. '''
         if pub_date.find('Month') is not None:
-            date = (pub_date.find('Month').text + ' ' +
-                    pub_date.find('Year').text)
+            month = pub_date.find('Month').text
+            if month.lower() in Pubs.MONTHS:
+                month = Pubs.MONTHS[month.lower()]
+            date = pub_date.find('Year').text + '-' + month
             if pub_date.find('Day') is not None:
-                date = pub_date.find('Day').text + ' ' + date
-            return date
+                day = '%02d' % int(pub_date.find('Day').text)
+                date = date + '-' + day
+            else:
+                date = date + '-01'
+            pub_obj['date'] = date
         elif pub_date.find('Year') is not None:
-            return pub_date.find('Year').text
+            pub_obj['date'] = pub_date.find('Year').text + '-01-01'
         elif pub_date.find('MedlineDate') is not None:
-            return pub_date.find('MedlineDate').text
+            date = pub_date.find('MedlineDate').text
+
+            # 1999 May-Jun and 1992 Summer-Fall
+            p = re.compile('(\d{4})\s(\w{3,6})\s*-\w+')
+            m = p.match(date)
+            if m:
+                date = m.group(1) + '-' + Pubs.MONTHS[m.group(2).lower()] + '-01'
+            else:
+                # 2010 May 26-Jun 1
+                p = re.compile('(\d{4})\s(\w{3}) (\d{1,2})-')
+                m = p.match(date)
+                if m:
+                    day = '%02d' % int(m.group(3))
+                    date = m.group(1) + '-' + Pubs.MONTHS[m.group(2).lower()] + '-' + day
+                else:
+                    # 1978-1979 and 1981 1st Quart
+                    p = re.compile('^(\d{4})\s*-')
+                    m = p.match(date)
+                    if m:
+                        date = m.group(1) + '-01-01'
+
+            pub_obj['date'] = date
+        else:
+            logger.warn("Date not found for PMID:"+pub_obj["PMID"])
