@@ -33,7 +33,7 @@ class Pubs():
             "abstract": {"type": "string"}
                    }
 
-#         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448]
+#         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448, 10250814]
         with open(filename, mode='w', encoding='utf-8') as f:
             f.write('{"mapping": ')
             f.write(json.dumps({"properties": mapping}))
@@ -188,10 +188,17 @@ class Pubs():
                     date = m.group(1) + '-' + Pubs.MONTHS[m.group(2).lower()] + '-' + day
                 else:
                     # 1978-1979 and 1981 1st Quart
-                    p = re.compile('^(\d{4})\s*-')
+                    p = re.compile('^(\d{4})\s*(-|1st|2nd|3rd|4th)')
                     m = p.match(date)
                     if m:
-                        date = m.group(1) + '-01-01'
+                        if m.group(2) == '2nd':
+                            date = m.group(1) + '-04-01'
+                        elif m.group(2) == '3rd':
+                            date = m.group(1) + '-07-01'
+                        elif m.group(2) == '4th':
+                            date = m.group(1) + '-10-01'
+                        else:
+                            date = m.group(1) + '-01-01'
 
             pub_obj['date'] = date
         else:
