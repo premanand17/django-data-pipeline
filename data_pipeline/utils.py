@@ -4,6 +4,9 @@ import configparser
 import time
 import xml.etree.ElementTree as ET
 from .management.helpers.pubs import Pubs
+from elastic.search import Search, ElasticQuery, Update
+import sys
+from elastic.query import Query
 
 
 class Monitor(object):
@@ -67,21 +70,54 @@ class PostProcess(object):
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
+
+        def get_new_pmids(pmids, disease_code):
+            ''' Find PMIDs in a list that are not in the elastic index. '''
+            chunkSize = 500
+            pmids_found = []
+            for i in range(0, len(pmids), chunkSize):
+                pmids_slice = pmids[i:i+chunkSize]
+                query = ElasticQuery(Query.terms("PMID", pmids_slice), sources=['PMID', 'disease'])
+                search = Search(query, idx=section['index'], size=len(pmids))
+                docs = search.search().docs
+                for doc in docs:
+                    disease = getattr(doc, 'disease')
+                    if disease is None:
+                        disease = []
+                    if disease_code not in disease:
+                        # update disease attribute
+                        ''' update document '''
+                        disease.append(disease_code)
+                        disease_field = {'doc': {'disease': disease}}
+                        Update.update_doc(doc, disease_field)
+                    pmids_found.append(getattr(doc, 'PMID'))
+
+            return [pmid for pmid in pmids if pmid not in pmids_found]
+
+        section_name = args[1]
         section_dir_name = args[2]
         base_dir_path = args[3]
         stage_dir = os.path.join(base_dir_path, 'STAGE', section_dir_name)
 
         if not os.path.exists(stage_dir):
             os.makedirs(stage_dir)
-        stage_file = os.path.join(stage_dir, kwargs['section']['output'] + '.json')
-        download_file = os.path.join(kwargs['dir_path'], kwargs['section']['output'])
+
+        section = kwargs['section']
+        stage_file = os.path.join(stage_dir, section['output'] + '.json')
+        download_file = os.path.join(kwargs['dir_path'], section['output'])
 
         tree = ET.parse(download_file)
         idlist = tree.find("IdList")
         ids = list(idlist.iter("Id"))
-
         pmids = [i.text for i in ids]
-        Pubs.fetch_details(pmids, stage_file)
+
+        parts = section_name.rsplit(':', 1)
+        disease_code = parts[1].lower()
+
+        if Search().index_exists(section['index']):
+            pmids = get_new_pmids(pmids, disease_code)
+
+        Pubs.fetch_details(pmids, stage_file, disease_code)
 
 
 class IniParser(object):
