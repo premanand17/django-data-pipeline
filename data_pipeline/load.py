@@ -23,11 +23,5 @@ class IndexLoad(IniParser):
         stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
                                   section['output'] + '.json')
 
-        if 'indexType' in section:
-            indexType = section['indexType']
-        else:
-            parts = section_name.rsplit(':', 1)
-            indexType = parts[1].lower()
-
         logger.debug('Loading: '+stage_file + ' into ' + section['index'])
-        call_command('index_search', indexType=indexType, indexJson=stage_file, indexName=section['index'])
+        call_command('index_search', indexType='auto', indexJson=stage_file, indexName=section['index'])
