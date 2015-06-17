@@ -1,35 +1,21 @@
 ''' Download Data Module '''
 from urllib.parse import urlparse
 from builtins import classmethod
-import xml.etree.ElementTree as ET
 import requests
 import ftputil
 import ftplib
-import time
-import configparser
 import os
 import logging
 import re
-from data_pipeline.management.helpers.pubs import Pubs
+from .utils import IniParser
+from .utils import post_process
+from .utils import Monitor
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
 
-def post_process(func):
-    ''' Used as a decorator to apply L{PostProcess} functions. '''
-    def wrapper(*args, **kwargs):
-        success = func(*args, **kwargs)
-        if success and 'section' in kwargs:
-            section = kwargs['section']
-            if 'post' in section:
-                post_func = getattr(globals()['PostProcess'], section['post'])
-                post_func(*args, **kwargs)
-        return success
-    return wrapper
-
-
-class Download:
+class Download(IniParser):
     ''' Handle data file downloads '''
 
     def download(self, url, dir_path, file_name=None, **kwargs):
@@ -49,40 +35,12 @@ class Download:
 
     def download_ini(self, ini_file, dir_path, sections=None):
         ''' Download data defined in the ini file. '''
-
-        # check for ini file in data pipeline home
-        if not os.path.isfile(ini_file):
-            DOWNLOAD_BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-            tmp = os.path.join(DOWNLOAD_BASE_DIR, 'data_pipeline', ini_file)
-            if os.path.isfile(tmp):
-                ini_file = tmp
-
-        config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
-        config.read(ini_file)
-
-        success = False
-        for section_name in config.sections():
-            if sections is not None and section_name not in sections:
-                continue
-
-            section_dir_name = self._inherit_section(section_name, config)
-            section_path = os.path.join(dir_path, self.__class__.__name__.upper(), section_dir_name)
-            success = self._parse_ini(section_name, dir_path=section_path, section=config[section_name])
-        return success
-
-    def _inherit_section(self, section_name, config):
-        ''' Add in parameters from another config section when a double colon
-        is found in the name. '''
-        if '::' in section_name:
-            inherit = section_name.split('::', maxsplit=1)[0]
-            if inherit in config:
-                for key in config[inherit]:
-                    config[section_name][key] = config[inherit][key]
-            return inherit
-        return section_name
+        return self.process_sections(self.read_ini(ini_file), dir_path, sections)
 
     @post_process
-    def _parse_ini(self, fname, dir_path='.', section=None):
+    def process_section(self, fname, section_dir_name, base_dir_path, dir_path='.', section=None):
+        ''' Overrides L{IniParser.process_section} to process a section
+        in the config file '''
         success = False
         if 'output' in section:
             fname = section['output']
@@ -113,7 +71,7 @@ class Download:
         return name
 
 
-class HTTPDownload:
+class HTTPDownload(object):
     ''' HTTP downloader. '''
 
     @classmethod
@@ -143,7 +101,7 @@ class HTTPDownload:
         return requests.get(url).status_code
 
 
-class FTPDownload:
+class FTPDownload(object):
     ''' FTP downloader. '''
 
     @classmethod
@@ -177,7 +135,7 @@ class FTPDownload:
         return ftp_host.path.exists(url_parse.path)
 
 
-class MartDownload:
+class MartDownload(object):
     ''' Biomart webservice downloads. '''
 
     @classmethod
@@ -190,7 +148,7 @@ class MartDownload:
         @param dir_path: Directory to write results to.
         @type  file_name: integer
         @param file_name: Output file name.
-        @type  query_filter: string
+        @type  qobjectuery_filter: string
         @keyword query_filter: Filter to be applied
                   (e.g. <Filter name="ensembl_gene_id" value="ENSG00000134242"/>.
         @type  tax: string
@@ -209,61 +167,3 @@ class MartDownload:
             '</Dataset>' \
             '</Query>' % (url, tax, query_filter, attrs_str)
         return HTTPDownload.download(url_query, dir_path, file_name)
-
-
-class PostProcess:
-
-    @classmethod
-    def zcat(cls, *args, **kwargs):
-        ''' Combine a list of compressed files. '''
-        section = kwargs['section']
-        dir_path = kwargs['dir_path']
-        out = os.path.join(kwargs['dir_path'], section['output'])
-
-        files = section['files'].split(",")
-        with open(out, 'wb') as outf:
-            for fname in files:
-                with open(os.path.join(dir_path, fname), 'rb') as infile:
-                    for line in infile:
-                        outf.write(line)
-                os.remove(os.path.join(dir_path, fname))
-
-    @classmethod
-    def xmlparse(cls, *args, **kwargs):
-        out = os.path.join(kwargs['dir_path'], kwargs['section']['output'])
-
-        tree = ET.parse(out)
-        idlist = tree.find("IdList")
-        ids = list(idlist.iter("Id"))
-
-        pmids = [i.text for i in ids]
-        Pubs.fetch_details(pmids, out + '.json')
-
-
-class Monitor:
-    ''' Monitor download progress. '''
-
-    def __init__(self, file_name, size=None):
-        if size is not None:
-            self.size = int(size)
-        self.size_progress = 0
-        self.previous = 0
-        self.start = time.time()
-        self.file_name = file_name
-        print("%s" % file_name, end="", flush=True)
-
-    def __call__(self, chunk):
-        self.size_progress += len(chunk)
-
-        if not hasattr(self, 'size'):
-            print("\r[%s] %s" % (self.size_progress, self.file_name), end="", flush=True)
-            return
-
-        progress = int(self.size_progress/self.size * 100)
-        if progress != self.previous and progress % 10 == 0:
-            time_taken = time.time() - self.start
-            eta = (time_taken / self.size_progress) * (self.size - self.size_progress)
-            print("\r[%s%s] eta:%ss  %s  " % ('=' * int(progress/2),
-                                              ' ' * (50-int(progress/2)),
-                                              str(int(eta)), self.file_name), end="", flush=True)
-            self.previous = progress
