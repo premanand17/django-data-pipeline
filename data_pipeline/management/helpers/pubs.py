@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class Pubs():
 
     @classmethod
-    def fetch_details(cls, pmids, filename):
+    def fetch_details(cls, pmids, filename, disease_code=None, source='auto'):
         ''' Given a list of PMIDs fetch their details from eutils.
         http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi??db=pubmed&retmode=xml&id=<PMIDS>
         Produces a JSON file containing the publications mapping and documents.
@@ -27,6 +27,8 @@ class Pubs():
         count = 0
         mapping = {
             "PMID": {"type": "integer"},
+            "disease": {"type": "string", "index": "not_analyzed"},
+            "source": {"type": "string"},
             "journal": {"type": "string"},
             "title": {"type": "string"},
             "date": {"type": "date"},
@@ -56,6 +58,9 @@ class Pubs():
                         f.write(',\n')
 
                     pub_obj = Pubs._parse_pubmed_record(pub)
+                    if disease_code is not None:
+                        pub_obj['disease'] = [disease_code]
+                    pub_obj['source'] = source
                     f.write(json.dumps(pub_obj))
                     count += 1
 
