@@ -1,10 +1,11 @@
 ''' Used to fetch publication details from NCBI and generate a JSON. '''
-from data_pipeline.management.helpers.exceptions import PublicationDownloadError
+
 import json
 import requests
 import xml.etree.ElementTree as ET
 import logging
 import re
+from .exceptions import PublicationDownloadError
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
