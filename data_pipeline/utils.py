@@ -3,10 +3,10 @@ import os
 import configparser
 import time
 import xml.etree.ElementTree as ET
-from .management.helpers.pubs import Pubs
+
 from elastic.search import Search, ElasticQuery, Update
-import sys
 from elastic.query import Query
+from .helper.pubs import Pubs
 
 
 class Monitor(object):
@@ -73,25 +73,21 @@ class PostProcess(object):
 
         def get_new_pmids(pmids, disease_code):
             ''' Find PMIDs in a list that are not in the elastic index. '''
-            chunkSize = 500
+            chunk_size = 500
             pmids_found = []
-            for i in range(0, len(pmids), chunkSize):
-                pmids_slice = pmids[i:i+chunkSize]
+            for i in range(0, len(pmids), chunk_size):
+                pmids_slice = pmids[i:i+chunk_size]
                 query = ElasticQuery(Query.terms("PMID", pmids_slice), sources=['PMID', 'disease'])
-                search = Search(query, idx=section['index'], size=len(pmids))
-                docs = search.search().docs
+                docs = Search(query, idx=section['index'], size=chunk_size).search().docs
                 for doc in docs:
                     disease = getattr(doc, 'disease')
                     if disease is None:
                         disease = []
                     if disease_code not in disease:
                         # update disease attribute
-                        ''' update document '''
                         disease.append(disease_code)
-                        disease_field = {'doc': {'disease': disease}}
-                        Update.update_doc(doc, disease_field)
+                        Update.update_doc(doc, {'doc': {'disease': disease}})
                     pmids_found.append(getattr(doc, 'PMID'))
-
             return [pmid for pmid in pmids if pmid not in pmids_found]
 
         section_name = args[1]

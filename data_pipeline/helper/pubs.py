@@ -37,7 +37,7 @@ class Pubs():
                    }
         mapping_keys = mapping.keys()
 
-#         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448, 10250814]
+#         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448, 10250814, 25743292]
         with open(filename, mode='w', encoding='utf-8') as f:
             f.write('{"mapping": ')
             f.write(json.dumps({"properties": mapping}))
@@ -65,7 +65,7 @@ class Pubs():
 
                     keys_not_found = [k for k in mapping_keys if k not in pub_obj]
                     if len(keys_not_found) > 0:
-                        logger.error("PMID: "+pub_obj['PMID']+' not found: '+str(keys_not_found))
+                        logger.warn("PMID: "+pub_obj['PMID']+' not found: '+str(keys_not_found))
                     f.write(json.dumps(pub_obj))
                     count += 1
 
@@ -79,7 +79,6 @@ class Pubs():
     @classmethod
     def _parse_pubmed_record(cls, pub):
         pmid = pub.find('PMID')
-        logger.debug(pmid.text)
         pub_obj = {'PMID': pmid.text}
         article = pub.find('Article')
         if article is not None:
