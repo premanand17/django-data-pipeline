@@ -35,6 +35,7 @@ class Pubs():
             "authors": {"type": "object"},
             "abstract": {"type": "string"}
                    }
+        mapping_keys = mapping.keys()
 
 #         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448, 10250814]
         with open(filename, mode='w', encoding='utf-8') as f:
@@ -61,6 +62,10 @@ class Pubs():
                     if disease_code is not None:
                         pub_obj['disease'] = [disease_code]
                     pub_obj['source'] = source
+
+                    keys_not_found = [k for k in mapping_keys if k not in pub_obj]
+                    if len(keys_not_found) > 0:
+                        logger.error("PMID: "+pub_obj['PMID']+' not found: '+str(keys_not_found))
                     f.write(json.dumps(pub_obj))
                     count += 1
 
@@ -120,7 +125,7 @@ class Pubs():
                     continue
             pub_obj['abstract'] = abstract
         except AttributeError:
-            logger.warn('No abstract found for PMID:'+pmid.text)
+            return
 
     @classmethod
     def get_authors(cls, pub_obj, authors, pmid):
