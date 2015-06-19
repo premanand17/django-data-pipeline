@@ -4,9 +4,11 @@ import configparser
 import time
 import xml.etree.ElementTree as ET
 
-from elastic.search import Search, ElasticQuery, Update
+from elastic.search import Search, ElasticQuery
 from elastic.query import Query
 from .helper.pubs import Pubs
+import json
+from elastic.management.loaders.loader import Loader
 
 
 class Monitor(object):
@@ -38,15 +40,36 @@ class Monitor(object):
             self.previous = progress
 
 
+def process_wrapper(*args, **kwargs):
+    section = kwargs['section']
+    ini_tag = None
+    if kwargs['stage'] == 'Download':
+        ini_tag = 'post'
+    elif kwargs['stage'] == 'Stage':
+        ini_tag = 'stage'
+    elif 'Load' in kwargs['stage']:
+        ini_tag = 'load'
+    if ini_tag is not None:
+        if ini_tag in section:
+            post_func = getattr(globals()['PostProcess'], section[ini_tag])
+            post_func(*args, **kwargs)
+
+
 def post_process(func):
     ''' Used as a decorator to apply L{PostProcess} functions. '''
     def wrapper(*args, **kwargs):
         success = func(*args, **kwargs)
-        if success and 'section' in kwargs:
-            section = kwargs['section']
-            if 'post' in section:
-                post_func = getattr(globals()['PostProcess'], section['post'])
-                post_func(*args, **kwargs)
+        if success:
+            process_wrapper(*args, **kwargs)
+        return success
+    return wrapper
+
+
+def pre_process(func):
+    ''' Used as a decorator to apply L{PostProcess} functions. '''
+    def wrapper(*args, **kwargs):
+        process_wrapper(*args, **kwargs)
+        success = func(*args, **kwargs)
         return success
     return wrapper
 
@@ -73,21 +96,35 @@ class PostProcess(object):
 
         def get_new_pmids(pmids, disease_code):
             ''' Find PMIDs in a list that are not in the elastic index. '''
-            chunk_size = 500
+            chunk_size = 800
             pmids_found = []
+            time.sleep(5)
             for i in range(0, len(pmids), chunk_size):
                 pmids_slice = pmids[i:i+chunk_size]
-                query = ElasticQuery(Query.terms("PMID", pmids_slice), sources=['PMID', 'disease'])
+                query = ElasticQuery(Query.terms("PMID", pmids_slice), sources=['PMID', 'tags'])
                 docs = Search(query, idx=section['index'], size=chunk_size).search().docs
+                json_data = ''
+                idx_name = ''
+                idx_type = ''
                 for doc in docs:
-                    disease = getattr(doc, 'disease')
+                    disease = getattr(doc, 'tags')['disease']
                     if disease is None:
                         disease = []
                     if disease_code not in disease:
                         # update disease attribute
                         disease.append(disease_code)
-                        Update.update_doc(doc, {'doc': {'disease': disease}})
+                        idx_name = doc._meta['_index']
+                        idx_type = doc.type()
+
+                        doc_data = {"update": {"_id": doc._meta['_id'], "_type": idx_type,
+                                               "_index": idx_name, "_retry_on_conflict": 3}}
+                        json_data += json.dumps(doc_data) + '\n'
+                        json_data += json.dumps({'doc': {'tags': {'disease': disease}}}) + '\n'
+
                     pmids_found.append(getattr(doc, 'PMID'))
+
+                if json_data != '':
+                    Loader().bulk_load(idx_name, idx_type, json_data)
             return [pmid for pmid in pmids if pmid not in pmids_found]
 
         section_name = args[1]
@@ -99,8 +136,10 @@ class PostProcess(object):
             os.makedirs(stage_dir)
 
         section = kwargs['section']
+        if 'output' not in section:
+            return
         stage_file = os.path.join(stage_dir, section['output'] + '.json')
-        download_file = os.path.join(kwargs['dir_path'], section['output'])
+        download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['output'])
 
         tree = ET.parse(download_file)
         idlist = tree.find("IdList")
@@ -141,10 +180,12 @@ class IniParser(object):
             section_dir_name = self._inherit_section(section_name, config)
             dir_path = os.path.join(base_dir_path, self.__class__.__name__.upper(), section_dir_name)
             success = self.process_section(section_name, section_dir_name, base_dir_path,
-                                           dir_path=dir_path, section=config[section_name])
+                                           dir_path=dir_path, section=config[section_name],
+                                           stage=self.__class__.__name__)
         return success
 
-    def process_section(self, section_name, section_dir_name, base_dir_path, dir_path='.', section=None):
+    def process_section(self, section_name, section_dir_name, base_dir_path,
+                        dir_path='.', section=None, stage=None):
         raise NotImplementedError("Inheriting class should implement this  method")
 
     def _inherit_section(self, section_name, config):
