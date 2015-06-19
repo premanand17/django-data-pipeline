@@ -26,9 +26,9 @@ class Pubs():
         chunkSize = 450
         count = 0
         mapping = {
+            "_id": {"type": "integer"},
             "PMID": {"type": "integer"},
-            "disease": {"type": "string", "index": "not_analyzed"},
-            "source": {"type": "string"},
+            "tags": {"type": "object", "index": "not_analyzed"},
             "journal": {"type": "string"},
             "title": {"type": "string"},
             "date": {"type": "date"},
@@ -60,8 +60,9 @@ class Pubs():
 
                     pub_obj = Pubs._parse_pubmed_record(pub)
                     if disease_code is not None:
-                        pub_obj['disease'] = [disease_code]
-                    pub_obj['source'] = source
+                        pub_obj['tags'] = {}
+                        pub_obj['tags']['disease'] = [disease_code]
+                        pub_obj['tags']['source'] = source
 
                     keys_not_found = [k for k in mapping_keys if k not in pub_obj]
                     if len(keys_not_found) > 0:
@@ -78,14 +79,14 @@ class Pubs():
 
     @classmethod
     def _parse_pubmed_record(cls, pub):
-        pmid = pub.find('PMID')
-        pub_obj = {'PMID': pmid.text}
+        pmid = pub.find('PMID').text
+        pub_obj = {'PMID': pmid, '_id': pmid}
         article = pub.find('Article')
         if article is not None:
             pub_obj['title'] = article.find('ArticleTitle').text
             authors = article.find('AuthorList')
             Pubs.get_authors(pub_obj, authors, pmid)
-            Pubs.get_abstract(pub_obj, article, pmid)
+            Pubs.get_abstract(pub_obj, article)
 
             journal = article.find('Journal')
             try:
@@ -102,14 +103,14 @@ class Pubs():
             pub_obj['title'] = pub.find('ArticleTitle').text
             authors = pub.find('AuthorList')
             Pubs.get_authors(pub_obj, authors, pmid)
-            Pubs.get_abstract(pub_obj, pub, pmid)
+            Pubs.get_abstract(pub_obj, pub)
             pub_date = pub.find('ContributionDate')
             Pubs.get_date(pub_obj, pub_date)
 
         return pub_obj
 
     @classmethod
-    def get_abstract(cls, pub_obj, article, pmid):
+    def get_abstract(cls, pub_obj, article):
         ''' Add the abastract to the publication object. '''
         try:
             texts = article.find('Abstract').findall('AbstractText')
@@ -144,7 +145,7 @@ class Pubs():
                 authors_arr.append(author_obj)
             pub_obj['authors'] = authors_arr
         except TypeError:
-            logger.warn('No authors found for PMID:'+pmid.text)
+            logger.warn('No authors found for PMID:'+pmid)
 
     # month mappings
     MONTHS = {'jan': '01',
@@ -209,6 +210,12 @@ class Pubs():
                             date = m.group(1) + '-10-01'
                         else:
                             date = m.group(1) + '-01-01'
+                    else:
+                        # 2000Jun 8-21
+                        p = re.compile('^(\d{4})\s*(\w{3,6})-*')
+                        m = p.match(date)
+                        if m:
+                            date = m.group(1) + '-' + Pubs.MONTHS[m.group(2).lower()] + '-01'
 
             pub_obj['date'] = date
         else:
