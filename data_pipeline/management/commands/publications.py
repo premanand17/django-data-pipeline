@@ -2,6 +2,7 @@
 from django.core.management.base import BaseCommand
 from data_pipeline.download import Download
 from data_pipeline.load import IndexLoad
+from data_pipeline.stage import Stage
 
 
 class Command(BaseCommand):
@@ -28,5 +29,7 @@ class Command(BaseCommand):
         if 'download' in options['steps']:
             if Download().download_ini(options['ini'], options['dir'], options['sections']):
                 self.stdout.write("DOWNLOAD COMPLETE")
+        if 'stage' in options['steps']:
+            Stage().stage(options['ini'], options['dir'], options['sections'])
         if 'load' in options['steps']:
             IndexLoad().load(options['ini'], options['dir'], options['sections'])
