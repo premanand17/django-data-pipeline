@@ -38,7 +38,8 @@ class Download(IniParser):
         return self.process_sections(self.read_ini(ini_file), dir_path, sections)
 
     @post_process
-    def process_section(self, fname, section_dir_name, base_dir_path, dir_path='.', section=None):
+    def process_section(self, fname, section_dir_name, base_dir_path,
+                        dir_path='.', section=None, stage='download'):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
         success = False
