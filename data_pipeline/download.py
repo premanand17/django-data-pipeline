@@ -1,69 +1,47 @@
 ''' Download Data Module '''
 from urllib.parse import urlparse
 from builtins import classmethod
-import xml.etree.ElementTree as ET
 import requests
 import ftputil
 import ftplib
-import time
-import configparser
 import os
 import logging
 import re
+from .utils import IniParser
+from .utils import post_process
+from .utils import Monitor
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
 
-def post_process(func):
-    ''' Used as a decorator to apply L{PostProcess} functions. '''
-    def wrapper(*args, **kwargs):
-        success = func(*args, **kwargs)
-        if success and 'section' in kwargs:
-            section = kwargs['section']
-            if 'post' in section:
-                post_func = getattr(globals()['PostProcess'], section['post'])
-                post_func(*args, **kwargs)
-        return success
-    return wrapper
-
-
-class Download:
+class Download(IniParser):
     ''' Handle data file downloads '''
 
     def download(self, url, dir_path, file_name=None, **kwargs):
         if file_name is None:
             file_name = self._url_to_file_name(url)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
 
         if url.startswith("ftp://"):
-            success = FTPDownload.download(url, dir_path, file_name)
+            success = FTPDownload.download(url, dir_path, file_name, **kwargs)
         elif 'emsembl_mart' in kwargs:
             success = MartDownload.download(url, dir_path, file_name, **kwargs)
         else:
-            success = HTTPDownload.download(url, dir_path, file_name)
+            success = HTTPDownload.download(url, dir_path, file_name, **kwargs)
         print()
         return success
 
-    def download_ini(self, ini_file, dir_path):
+    def download_ini(self, ini_file, dir_path, sections=None):
         ''' Download data defined in the ini file. '''
-
-        # check for ini file in data pipeline home
-        if not os.path.isfile(ini_file):
-            DOWNLOAD_BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-            tmp = os.path.join(DOWNLOAD_BASE_DIR, 'data_pipeline', ini_file)
-            if os.path.isfile(tmp):
-                ini_file = tmp
-
-        config = configparser.ConfigParser()
-        config.read(ini_file)
-
-        success = False
-        for section_name in config.sections():
-            success = self._parse_ini(section_name, dir_path=dir_path, section=config[section_name])
-        return success
+        return self.process_sections(self.read_ini(ini_file), dir_path, sections)
 
     @post_process
-    def _parse_ini(self, fname, dir_path='.', section=None):
+    def process_section(self, fname, section_dir_name, base_dir_path,
+                        dir_path='.', section=None, stage='download'):
+        ''' Overrides L{IniParser.process_section} to process a section
+        in the config file '''
         success = False
         if 'output' in section:
             fname = section['output']
@@ -94,45 +72,71 @@ class Download:
         return name
 
 
-class HTTPDownload:
+class HTTPDownload(object):
     ''' HTTP downloader. '''
 
     @classmethod
-    def download(cls, url, dir_path, file_name):
-        r = requests.get(url, stream=True)
+    def download(cls, url, dir_path, file_name, append=False):
+        r = requests.get(url, stream=True, timeout=10)
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
 
         monitor = Monitor(file_name, size=r.headers.get('content-length'))
-        with open(os.path.join(dir_path, file_name), 'wb') as f:
+        if append:
+            access = 'ab'
+        else:
+            access = 'wb'
+
+        with open(os.path.join(dir_path, file_name), access) as f:
             for chunk in r.iter_content(chunk_size=1024):
                 if chunk:  # filter out keep-alive new chunks
                     f.write(chunk)
                     f.flush()
                     monitor(chunk)
+        r.close()
         return True
 
+    @classmethod
+    def status(cls, url):
+        return requests.get(url).status_code
 
-class FTPDownload:
+
+class FTPDownload(object):
     ''' FTP downloader. '''
 
     @classmethod
-    def download(cls, url, dir_path, file_name):
+    def download(cls, url, dir_path, file_name, username='anonymous', password=''):
         url_parse = urlparse(url)
-        ftp_host = ftputil.FTPHost(url_parse.netloc, 'anonymous', '',
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
                                    session_factory=ftplib.FTP)
         size = ftp_host.path.getsize(url_parse.path)
         mon = Monitor(file_name, size=size)
         ftp_host.download(url_parse.path, os.path.join(dir_path, file_name), callback=mon)
+        ftp_host.close()
 
         if mon.size_progress != size:
             logger.error(file_name)
             logger.error("download size: "+mon.size_progress+" server size: "+size)
         return mon.size_progress == size
 
+    @classmethod
+    def mtime(cls, url, username='anonymous', password=''):
+        ''' Time of most recent content modification in seconds '''
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
+                                   session_factory=ftplib.FTP)
+        return getattr(ftp_host.stat(url_parse.path), 'st_mtime')
 
-class MartDownload:
+    @classmethod
+    def exists(cls, url, username='anonymous', password=''):
+        url_parse = urlparse(url)
+        ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
+                                   session_factory=ftplib.FTP)
+        return ftp_host.path.exists(url_parse.path)
+
+
+class MartDownload(object):
     ''' Biomart webservice downloads. '''
 
     @classmethod
@@ -145,7 +149,7 @@ class MartDownload:
         @param dir_path: Directory to write results to.
         @type  file_name: integer
         @param file_name: Output file name.
-        @type  query_filter: string
+        @type  qobjectuery_filter: string
         @keyword query_filter: Filter to be applied
                   (e.g. <Filter name="ensembl_gene_id" value="ENSG00000134242"/>.
         @type  tax: string
@@ -164,62 +168,3 @@ class MartDownload:
             '</Dataset>' \
             '</Query>' % (url, tax, query_filter, attrs_str)
         return HTTPDownload.download(url_query, dir_path, file_name)
-
-
-class PostProcess:
-
-    @classmethod
-    def zcat(cls, *args, **kwargs):
-        ''' Combine a list of compressed files. '''
-        section = kwargs['section']
-        dir_path = kwargs['dir_path']
-        out = os.path.join(kwargs['dir_path'], section['output'])
-
-        files = section['files'].split(",")
-        with open(out, 'wb') as outf:
-            for fname in files:
-                with open(os.path.join(dir_path, fname), 'rb') as infile:
-                    for line in infile:
-                        outf.write(line)
-                os.remove(os.path.join(dir_path, fname))
-
-    @classmethod
-    def xmlparse(cls, *args, **kwargs):
-        out = os.path.join(kwargs['dir_path'], kwargs['section']['output'])
-
-        tree = ET.parse(out)
-        idlist = tree.find("IdList")
-        ids = list(idlist.iter("Id"))
-        os.remove(out)
-        with open(out, 'w') as outf:
-            for i in ids:
-                outf.write(i.text+'\n')
-
-
-class Monitor:
-    ''' Monitor download progress. '''
-
-    def __init__(self, file_name, size=None):
-        if size is not None:
-            self.size = int(size)
-        self.size_progress = 0
-        self.previous = 0
-        self.start = time.time()
-        self.file_name = file_name
-        print("%s" % file_name, end="", flush=True)
-
-    def __call__(self, chunk):
-        self.size_progress += len(chunk)
-
-        if not hasattr(self, 'size'):
-            print("\r[%s] %s" % (self.size_progress, self.file_name), end="", flush=True)
-            return
-
-        progress = int(self.size_progress/self.size * 100)
-        if progress != self.previous and progress % 10 == 0:
-            time_taken = time.time() - self.start
-            eta = (time_taken / self.size_progress) * (self.size - self.size_progress)
-            print("\r[%s%s] eta:%ss  %s  " % ('=' * int(progress/2),
-                                              ' ' * (50-int(progress/2)),
-                                              str(int(eta)), self.file_name), end="", flush=True)
-            self.previous = progress
