@@ -25,7 +25,6 @@ class Command(BaseCommand):
                             nargs='+', required=True)
 
     def handle(self, *args, **options):
-
         if 'download' in options['steps']:
             if Download().download_ini(options['ini'], options['dir'], options['sections']):
                 self.stdout.write("DOWNLOAD COMPLETE")
