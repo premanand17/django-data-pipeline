@@ -17,6 +17,9 @@ class Command(BaseCommand):
         parser.add_argument('--ini',
                             dest='ini',
                             help='Input file defining downloads.')
+        parser.add_argument('--sections',
+                            dest='sections',
+                            help='Comma separated section names (e.g. BANDS) to download [default: all].')
         parser.add_argument('--download',
                             dest='download',
                             help='Download step',
@@ -28,7 +31,7 @@ class Command(BaseCommand):
             if options['ini']:
                 if not options['dir']:
                     raise CommandError('--dir parameter not provided')
-                if Download().download_ini(options['ini'], options['dir']):
+                if Download().download_ini(options['ini'], options['dir'], options['sections']):
                     self.stdout.write("DOWNLOAD COMPLETE")
             else:
                 if Download().download(options['url'], options['dir']):
