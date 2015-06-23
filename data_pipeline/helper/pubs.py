@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 import logging
 import re
 from .exceptions import PublicationDownloadError
+import time
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ class Pubs():
           "docs": [...]
         }
         '''
-        chunkSize = 450
+        chunk_size = 450
         count = 0
         mapping = {
             "_id": {"type": "integer"},
@@ -36,14 +37,15 @@ class Pubs():
             "abstract": {"type": "string"}
                    }
         mapping_keys = mapping.keys()
+        start = time.time()
 
 #         pmids = [25905407, 25905392, 23369186, 24947582, 1476675, 18225448, 10250814, 25743292]
         with open(filename, mode='w', encoding='utf-8') as f:
             f.write('{"mapping": ')
             f.write(json.dumps({"properties": mapping}))
             f.write(',\n"docs":[\n')
-            for i in range(0, len(pmids), chunkSize):
-                chunk = pmids[i:i+chunkSize]
+            for i in range(0, len(pmids), chunk_size):
+                chunk = pmids[i:i+chunk_size]
                 url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi' \
                       "?db=pubmed&retmode=xml&id=%s" % \
                       ",".join([str(item) for item in chunk])
@@ -62,6 +64,9 @@ class Pubs():
                     if disease_code is not None:
                         pub_obj['tags'] = {}
                         pub_obj['tags']['disease'] = [disease_code]
+                    if source is not None:
+                        if 'tags' not in pub_obj:
+                            pub_obj['tags'] = {}
                         pub_obj['tags']['source'] = source
 
                     keys_not_found = [k for k in mapping_keys if k not in pub_obj]
@@ -69,6 +74,11 @@ class Pubs():
                         logger.warn("PMID: "+pub_obj['PMID']+' not found: '+str(keys_not_found))
                     f.write(json.dumps(pub_obj))
                     count += 1
+
+                time_taken = time.time() - start
+                eta = (time_taken / (i+chunk_size)) * (len(pmids) - i+chunk_size)
+                logger.debug('Retrieved '+(str(i+chunk_size))+' PMID records of '+str(len(pmids)) +
+                             ' :: ETA/s: '+str(int(eta)))
 
             f.write('\n]}')
         logger.debug("No. publications downloaded "+str(count))
@@ -105,6 +115,9 @@ class Pubs():
             Pubs.get_authors(pub_obj, authors, pmid)
             Pubs.get_abstract(pub_obj, pub)
             pub_date = pub.find('ContributionDate')
+            if pub_date is None:
+                pub_date = pub.find('Book').find('PubDate')
+
             Pubs.get_date(pub_obj, pub_date)
 
         return pub_obj
