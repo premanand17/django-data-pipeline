@@ -83,7 +83,7 @@ class Pubs():
             f.write('\n]}')
         logger.debug("No. publications downloaded "+str(count))
         if count != len(pmids):
-            msg = "No. publications does not match the number of requested PMIDs ="+len(pmids)
+            msg = "No. publications does not match the number of requested PMIDs ="+str(len(pmids))
             logger.error(msg)
             raise PublicationDownloadError(msg)
 
