@@ -11,6 +11,9 @@ import json
 from elastic.management.loaders.loader import Loader
 import re
 import gzip
+import logging
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 
 class Monitor(object):
@@ -121,22 +124,26 @@ class PostProcess(object):
             for doc in docs:
                 pmids_found_add(getattr(doc, 'PMID'))
                 if disease_code is not None:
-                    disease = getattr(doc, 'tags')['disease']
-                    if disease is None:
+                    tags = getattr(doc, 'tags')
+                    if 'disease' in tags:
+                        disease = tags['disease']
+                    else:
                         disease = []
                     if disease_code not in disease:
                         # update disease attribute
                         disease.append(disease_code)
+                        tags['disease'] = disease
                         idx_name = doc._meta['_index']
                         idx_type = doc.type()
 
                         doc_data = {"update": {"_id": doc._meta['_id'], "_type": idx_type,
                                                "_index": idx_name, "_retry_on_conflict": 3}}
                         json_data += json.dumps(doc_data) + '\n'
-                        json_data += json.dumps({'doc': {'tags': {'disease': disease}}}) + '\n'
+                        json_data += json.dumps({'doc': {'tags': tags}}) + '\n'
 
             if json_data != '':
                 Loader().bulk_load(idx_name, idx_type, json_data)
+
         return [pmid for pmid in pmids if pmid not in pmids_found]
 
     @classmethod
@@ -187,6 +194,7 @@ class PostProcess(object):
         idlist = tree.find("IdList")
         ids = list(idlist.iter("Id"))
         pmids = [i.text for i in ids]
+        npmids = len(pmids)
 
         parts = section_name.rsplit(':', 1)
         disease_code = parts[1].lower()
@@ -194,6 +202,7 @@ class PostProcess(object):
         if Search().index_exists(section['index']):
             pmids = cls.get_new_pmids(pmids, section['index'], disease_code=disease_code)
 
+        logger.debug("No. of PMIDs in "+args[1]+": "+str(npmids))
         Pubs.fetch_details(pmids, stage_file, disease_code)
 
 
