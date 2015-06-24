@@ -82,7 +82,7 @@ class Pubs():
 
                 time_taken = time.time() - start
                 eta = (time_taken / (i+chunk_size)) * (len(pmids) - i+chunk_size)
-                logger.debug('Retrieved '+(str(i+chunk_size))+' PMID records of '+str(len(pmids)) +
+                logger.debug('Retrieved '+(str(count))+' PMID records of '+str(len(pmids)) +
                              ' :: ETA/s: '+str(int(eta)))
 
             f.write('\n]}')
