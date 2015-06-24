@@ -217,10 +217,10 @@ class Pubs():
                     date = m.group(1) + '-' + Pubs.MONTHS[m.group(2).lower()] + '-' + day
                 else:
                     # 1978-1979 and 1981 1st Quart
-                    p = re.compile('^(\d{4})\s*(-|1st|2nd|3rd|4th)')
+                    p = re.compile('^(\d{4})\s*(-|1st|2nd|2d|3rd|4th)')
                     m = p.match(date)
                     if m:
-                        if m.group(2) == '2nd':
+                        if m.group(2) == '2nd' or m.group(2) == '2d':
                             date = m.group(1) + '-04-01'
                         elif m.group(2) == '3rd':
                             date = m.group(1) + '-07-01'
