@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 class Pubs():
 
+    DUPLICATE_PMIDS = ['22543779']
+
     @classmethod
     def fetch_details(cls, pmids, filename, disease_code=None, source='auto'):
         ''' Given a list of PMIDs fetch their details from eutils.
@@ -24,6 +26,9 @@ class Pubs():
           "docs": [...]
         }
         '''
+
+        # remove known duplicate PMIDs
+        pmids = [pmid for pmid in pmids if pmid not in Pubs.DUPLICATE_PMIDS]
         chunk_size = 450
         count = 0
         mapping = {
