@@ -202,7 +202,7 @@ class PostProcess(object):
         if Search().index_exists(section['index']):
             pmids = cls.get_new_pmids(pmids, section['index'], disease_code=disease_code)
 
-        logger.debug("No. of PMIDs in "+args[1]+": "+str(npmids))
+        logger.debug("Total No. of PMIDs in "+args[1]+": "+str(npmids))
         Pubs.fetch_details(pmids, stage_file, disease_code)
 
 
