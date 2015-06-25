@@ -10,7 +10,8 @@ Publication Pipeline
 The publication.ini is used to define the configuration for downloading,
 staging/processing and loading/indexing. To run the publication pipeline::
 
-    ./manage.py publications --dir tmp --ini publications.ini --steps  download stage  load
+    ./manage.py publications --dir tmp --ini publications.ini \
+                             --steps download stage load
 
 Or step-by-step::
 
@@ -20,7 +21,8 @@ Or step-by-step::
                              --sections GENE --steps load
 
     ./manage.py publications --dir tmp --ini publications.ini \
-                             --sections [DISEASE::T1D],[DISEASE::CRO] --steps  download load
+                             --sections [DISEASE::T1D],[DISEASE::CRO] \
+                             --steps  download load
 
     
 Note a useful terms aggregation for finding the number of documents per disease::
