@@ -21,10 +21,14 @@ class IndexLoad(IniParser):
                         dir_path='.', section=None, stage='load'):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
-        if 'output' not in section:
+        if 'output' in section:
+            stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
+                                      section['output'] + '.json')
+        elif 'files' in section:
+            stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
+                                      section['files'] + '.json')
+        else:
             return
-        stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
-                                  section['output'] + '.json')
 
         if not os.path.exists(stage_file):
             logger.error('File does not exist: '+stage_file)

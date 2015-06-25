@@ -5,10 +5,15 @@ import time
 import xml.etree.ElementTree as ET
 
 from elastic.search import Search, ElasticQuery
-from elastic.query import Query
+from elastic.query import Query, TermsFilter
 from .helper.pubs import Pubs
 import json
 from elastic.management.loaders.loader import Loader
+import re
+import gzip
+import logging
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 
 class Monitor(object):
@@ -49,6 +54,7 @@ def process_wrapper(*args, **kwargs):
         ini_tag = 'stage'
     elif 'Load' in kwargs['stage']:
         ini_tag = 'load'
+
     if ini_tag is not None:
         if ini_tag in section:
             post_func = getattr(globals()['PostProcess'], section[ini_tag])
@@ -77,6 +83,90 @@ def pre_process(func):
 class PostProcess(object):
 
     @classmethod
+    def _get_stage_file(cls, *args, **kwargs):
+        section = kwargs['section']
+        section_dir_name = args[2]
+        base_dir_path = args[3]
+        stage_dir = os.path.join(base_dir_path, 'STAGE', section_dir_name)
+        if not os.path.exists(stage_dir):
+            os.makedirs(stage_dir)
+        if 'output' in section:
+            return os.path.join(stage_dir, section['output'] + '.json')
+        elif 'files' in section:
+            return os.path.join(stage_dir, section['files'] + '.json')
+
+    @classmethod
+    def _get_download_file(cls, *args, **kwargs):
+        section = kwargs['section']
+        section_dir_name = args[2]
+        base_dir_path = args[3]
+        if 'output' in section:
+            return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['output'])
+        elif 'files' in section:
+            return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
+
+    @classmethod
+    def get_new_pmids(cls, pmids, idx, disease_code=None):
+        ''' Find PMIDs in a list that are not in the elastic index. '''
+        chunk_size = 800
+        pmids_found = set()
+        pmids_found_add = pmids_found.add
+        time.sleep(5)
+
+        for i in range(0, len(pmids), chunk_size):
+            pmids_slice = pmids[i:i+chunk_size]
+            terms_filter = TermsFilter.get_terms_filter("PMID", pmids_slice)
+            query = ElasticQuery.filtered(Query.match_all(), terms_filter, sources=['PMID', 'tags'])
+
+            docs = Search(query, idx=idx, size=chunk_size).search().docs
+            json_data = ''
+
+            for doc in docs:
+                pmids_found_add(getattr(doc, 'PMID'))
+                if disease_code is not None:
+                    tags = getattr(doc, 'tags')
+                    if 'disease' in tags:
+                        disease = tags['disease']
+                    else:
+                        disease = []
+                    if disease_code not in disease:
+                        # update disease attribute
+                        disease.append(disease_code)
+                        tags['disease'] = disease
+                        idx_name = doc._meta['_index']
+                        idx_type = doc.type()
+
+                        doc_data = {"update": {"_id": doc._meta['_id'], "_type": idx_type,
+                                               "_index": idx_name, "_retry_on_conflict": 3}}
+                        json_data += json.dumps(doc_data) + '\n'
+                        json_data += json.dumps({'doc': {'tags': tags}}) + '\n'
+
+            if json_data != '':
+                Loader().bulk_load(idx_name, idx_type, json_data)
+
+        return [pmid for pmid in pmids if pmid not in pmids_found]
+
+    @classmethod
+    def unique(cls, *args, **kwargs):
+        ''' Combine a list of compressed files. '''
+        section = kwargs['section']
+        stage_file = cls._get_stage_file(*args, **kwargs)
+        download_file = cls._get_download_file(*args, **kwargs)
+
+        pmids = set()
+        with gzip.open(download_file, 'rt') as outf:
+            seen_add = pmids.add
+            for x in outf:
+                if not x.startswith('9606\t'):
+                    continue
+                pmid = re.split('\t', x)[2].strip()
+                if pmid not in pmids:
+                    seen_add(pmid)
+        new_pmids = cls.get_new_pmids(list(pmids), section['index'])
+        print(len(new_pmids))
+        Pubs.fetch_details(new_pmids, stage_file)
+
+    @classmethod
     def zcat(cls, *args, **kwargs):
         ''' Combine a list of compressed files. '''
         section = kwargs['section']
@@ -93,65 +183,26 @@ class PostProcess(object):
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
-
-        def get_new_pmids(pmids, disease_code):
-            ''' Find PMIDs in a list that are not in the elastic index. '''
-            chunk_size = 800
-            pmids_found = []
-            time.sleep(5)
-            for i in range(0, len(pmids), chunk_size):
-                pmids_slice = pmids[i:i+chunk_size]
-                query = ElasticQuery(Query.terms("PMID", pmids_slice), sources=['PMID', 'tags'])
-                docs = Search(query, idx=section['index'], size=chunk_size).search().docs
-                json_data = ''
-                idx_name = ''
-                idx_type = ''
-                for doc in docs:
-                    disease = getattr(doc, 'tags')['disease']
-                    if disease is None:
-                        disease = []
-                    if disease_code not in disease:
-                        # update disease attribute
-                        disease.append(disease_code)
-                        idx_name = doc._meta['_index']
-                        idx_type = doc.type()
-
-                        doc_data = {"update": {"_id": doc._meta['_id'], "_type": idx_type,
-                                               "_index": idx_name, "_retry_on_conflict": 3}}
-                        json_data += json.dumps(doc_data) + '\n'
-                        json_data += json.dumps({'doc': {'tags': {'disease': disease}}}) + '\n'
-
-                    pmids_found.append(getattr(doc, 'PMID'))
-
-                if json_data != '':
-                    Loader().bulk_load(idx_name, idx_type, json_data)
-            return [pmid for pmid in pmids if pmid not in pmids_found]
-
         section_name = args[1]
-        section_dir_name = args[2]
-        base_dir_path = args[3]
-        stage_dir = os.path.join(base_dir_path, 'STAGE', section_dir_name)
-
-        if not os.path.exists(stage_dir):
-            os.makedirs(stage_dir)
-
         section = kwargs['section']
-        if 'output' not in section:
+        stage_file = cls._get_stage_file(*args, **kwargs)
+        download_file = cls._get_download_file(*args, **kwargs)
+        if download_file is None:
             return
-        stage_file = os.path.join(stage_dir, section['output'] + '.json')
-        download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['output'])
 
         tree = ET.parse(download_file)
         idlist = tree.find("IdList")
         ids = list(idlist.iter("Id"))
         pmids = [i.text for i in ids]
+        npmids = len(pmids)
 
         parts = section_name.rsplit(':', 1)
         disease_code = parts[1].lower()
 
         if Search().index_exists(section['index']):
-            pmids = get_new_pmids(pmids, disease_code)
+            pmids = cls.get_new_pmids(pmids, section['index'], disease_code=disease_code)
 
+        logger.debug("Total No. of PMIDs in "+args[1]+": "+str(npmids))
         Pubs.fetch_details(pmids, stage_file, disease_code)
 
 

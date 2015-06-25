@@ -20,10 +20,14 @@ class Stage(IniParser):
                         dir_path='.', section=None, stage='stage'):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
-        if 'output' not in section:
+        if 'output' in section:
+            download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
+                                         section['output'])
+        elif 'files' in section:
+            download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
+                                         section['files'])
+        else:
             return False
-        download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
-                                     section['output'])
 
         if not os.path.exists(download_file):
             logger.error('File does not exist: '+download_file)
