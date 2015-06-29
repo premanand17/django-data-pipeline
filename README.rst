@@ -29,5 +29,8 @@ will query EUTILS only for new publications it finds and add those to the index.
 
 Note a useful terms aggregation for finding the number of documents per disease::
 
-    curl 'http://127.0.01:9200/publications/_search?size=1&from=0&pretty' \
-       -d '{"aggregations": {"test": {"terms": {"field": "disease", "size": 0}}}}'
+    curl 'http://127.0.0.1:9200/publications/_search?size=1&from=0&pretty' \
+       -d '{"aggs": {"disease_groups": {"terms": {"field": "disease", "size": 0}}}}'
+
+    curl 'http://127.0.0.1:9200/publications_v0.0.1/_search?size=0&from=0&pretty' \
+       -d '{"aggs": {"missing_disease_groups": {"missing": {"field": "disease"}}}}'
