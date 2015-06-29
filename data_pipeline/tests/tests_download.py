@@ -2,8 +2,10 @@
 from django.test import TestCase
 from django.core.management import call_command
 from data_pipeline.download import HTTPDownload, FTPDownload, MartDownload
-import os
 from django.utils.six import StringIO
+from elastic.elastic_settings import ElasticSettings
+import os
+import requests
 
 
 class DownloadTest(TestCase):
@@ -14,6 +16,14 @@ class DownloadTest(TestCase):
         ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
         call_command('pipeline', dir='/tmp', ini=ini_file, download=True, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
+
+    def test_pub_ini_file(self):
+        ''' Test publication ini file downloads. '''
+        out = StringIO()
+        ini_file = os.path.join(os.path.dirname(__file__), 'publication.ini')
+        call_command('publications', '--dir', '/tmp', '--steps', 'download', 'load', ini=ini_file, stdout=out)
+        self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
+        requests.delete(ElasticSettings.url() + '/' + 'test__publications')
 
     def test_file_cmd(self):
         out = StringIO()
