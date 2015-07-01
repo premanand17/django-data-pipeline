@@ -12,6 +12,7 @@ from elastic.management.loaders.loader import Loader
 import re
 import gzip
 import logging
+from data_pipeline.helper.gene import Gene
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,18 @@ class PostProcess(object):
         elif 'files' in section:
             return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
 
+    ''' Pipeline methods '''
+    @classmethod
+    def gene_info_parse(cls, *args, **kwargs):
+        ''' '''
+        stage_file = cls._get_stage_file(*args, **kwargs)
+        download_file = cls._get_download_file(*args, **kwargs)
+
+        with gzip.open(download_file, 'rt') as gene_info_f:
+            with open(stage_file, 'w') as outfile:
+                json.dump(Gene.gene_info_parse(gene_info_f), outfile, indent=0)
+
+    ''' Publication methods '''
     @classmethod
     def get_new_pmids(cls, pmids, idx, disease_code=None):
         ''' Find PMIDs in a list that are not in the elastic index. '''
