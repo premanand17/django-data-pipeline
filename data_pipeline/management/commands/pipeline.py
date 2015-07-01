@@ -1,6 +1,7 @@
 ''' Command line tool to manage downloads. '''
 from django.core.management.base import BaseCommand, CommandError
 from data_pipeline.download import Download
+from data_pipeline.stage import Stage
 
 
 class Command(BaseCommand):
@@ -20,14 +21,14 @@ class Command(BaseCommand):
         parser.add_argument('--sections',
                             dest='sections',
                             help='Comma separated section names (e.g. BANDS) to download [default: all].')
-        parser.add_argument('--download',
-                            dest='download',
-                            help='Download step',
-                            action="store_true")
+        parser.add_argument('--steps',
+                            dest='steps',
+                            help='Steps to run [download load]',
+                            nargs='+', required=True)
 
     def handle(self, *args, **options):
 
-        if options['download']:
+        if 'download' in options['steps']:
             if options['ini']:
                 if not options['dir']:
                     raise CommandError('--dir parameter not provided')
@@ -36,3 +37,5 @@ class Command(BaseCommand):
             else:
                 if Download().download(options['url'], options['dir']):
                     self.stdout.write("DOWNLOAD COMPLETE")
+        if 'stage' in options['steps']:
+            Stage().stage(options['ini'], options['dir'], options['sections'])
