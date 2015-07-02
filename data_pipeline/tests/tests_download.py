@@ -14,7 +14,7 @@ class DownloadTest(TestCase):
         ''' Test ini file downloads. '''
         out = StringIO()
         ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
-        call_command('pipeline', dir='/tmp', ini=ini_file, download=True, stdout=out)
+        call_command('pipeline', '--steps', 'download', dir='/tmp', ini=ini_file, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
 
     def test_pub_ini_file(self):
@@ -27,7 +27,7 @@ class DownloadTest(TestCase):
 
     def test_file_cmd(self):
         out = StringIO()
-        call_command('pipeline', dir='/tmp', url='http://t1dbase.org', download=True, stdout=out)
+        call_command('pipeline', '--steps', 'download', dir='/tmp', url='http://t1dbase.org', stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
 
     def test_http(self):
@@ -40,7 +40,7 @@ class DownloadTest(TestCase):
         out = os.path.join('/tmp', 'README')
         if os.path.isfile(out):
             os.remove(out)
-        call_command('pipeline', dir='/tmp', url='ftp://ftp.ebi.ac.uk/pub/databases/embl/README', download=True)
+        call_command('pipeline', '--steps', 'download', dir='/tmp', url='ftp://ftp.ebi.ac.uk/pub/databases/embl/README')
         self.assertTrue(os.path.isfile(os.path.join('/tmp', 'README')), 'FTP test command')
         os.remove(out)
 
