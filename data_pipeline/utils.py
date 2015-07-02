@@ -182,6 +182,10 @@ class PostProcess(object):
                 os.remove(os.path.join(dir_path, fname))
 
     @classmethod
+    def psimitab(cls, *args, **kwargs):
+        print("Hello")
+
+    @classmethod
     def xmlparse(cls, *args, **kwargs):
         section_name = args[1]
         section = kwargs['section']
