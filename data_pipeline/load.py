@@ -34,4 +34,9 @@ class IndexLoad(IniParser):
             logger.error('File does not exist: '+stage_file)
             return
         logger.debug('Loading: '+stage_file + ' into ' + section['index'])
-        call_command('index_search', indexType=section['index_type'], indexJson=stage_file, indexName=section['index'])
+
+        if 'index_type' in section:
+            idx_type = section['index_type']
+        else:
+            idx_type = 'auto'
+        call_command('index_search', indexType=idx_type, indexJson=stage_file, indexName=section['index'])
