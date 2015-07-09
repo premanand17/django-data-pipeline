@@ -107,6 +107,8 @@ class Gene(object):
 
     @classmethod
     def ensmart_gene_parse(cls, ensmart_f, idx):
+        ''' For those gene docs missing a dbxrefs.entrez use Ensembl Mart to
+        fill in. '''
         genes = {}
         count = 0
         for ensmart in ensmart_f:
