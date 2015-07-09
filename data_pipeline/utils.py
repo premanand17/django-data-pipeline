@@ -12,6 +12,7 @@ from elastic.management.loaders.loader import Loader
 import re
 import gzip
 import logging
+from data_pipeline.helper.gene import Gene
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,48 @@ class PostProcess(object):
         elif 'files' in section:
             return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
 
+    ''' Pipeline methods '''
+    @classmethod
+    def ensembl_gene_parse(cls, *args, **kwargs):
+        ''' Parse gene GTF file from ensembl. '''
+        stage_file = cls._get_stage_file(*args, **kwargs)
+        download_file = cls._get_download_file(*args, **kwargs)
+        Gene.gene_mapping(kwargs['section']['index'], kwargs['section']['index_type'])
+        with gzip.open(download_file, 'rt') as ensembl_gene_f:
+            with open(stage_file, 'w') as outfile:
+                json.dump(Gene.ensembl_gene_parse(ensembl_gene_f), outfile, indent=0)
+
+    @classmethod
+    def ensmart_gene_parse(cls, *args, **kwargs):
+        ''' Parse result from ensembl mart. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as ensmart_f:
+            Gene.ensmart_gene_parse(ensmart_f, kwargs['section']['index'])
+
+    @classmethod
+    def gene2ensembl_parse(cls, *args, **kwargs):
+        ''' Parse gene2ensembl file from NCBI. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with gzip.open(download_file, 'rt') as gene2ens_f:
+            Gene.gene2ensembl_parse(gene2ens_f, kwargs['section']['index'])
+
+    @classmethod
+    def gene_info_parse(cls, *args, **kwargs):
+        ''' Parse gene_info file from NCBI. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+
+        with gzip.open(download_file, 'rt') as gene_info_f:
+            Gene.gene_info_parse(gene_info_f, idx)
+
+    @classmethod
+    def gene_pub_parse(cls, *args, **kwargs):
+        ''' Parse gene2pubmed file from NCBI. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with gzip.open(download_file, 'rt') as gene_pub_f:
+            Gene.gene_pub_parse(gene_pub_f, kwargs['section']['index'])
+
+    ''' Publication methods '''
     @classmethod
     def get_new_pmids(cls, pmids, idx, disease_code=None):
         ''' Find PMIDs in a list that are not in the elastic index. '''
