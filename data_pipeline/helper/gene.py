@@ -1,7 +1,7 @@
 import logging
 from builtins import classmethod
 from elastic.search import ElasticQuery, Search
-from elastic.query import Query, TermsFilter
+from elastic.query import Query, TermsFilter, Filter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 import json
@@ -37,13 +37,18 @@ class Gene(object):
         ''' Parse gene GTF file from ensembl to create gene index. '''
         gene_list = {}
         gene_list['docs'] = []
+        allowed_chr = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+                       "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+                       "21", "22", "X", "Y"]
         for egene in ensembl_gene_parse:
             if egene.startswith('#'):
                 continue
             parts = egene.split('\t')
-            if 'ensembl' in parts[1] and parts[2] == 'gene':
+            if parts[2] == 'gene':
                 gi = {}
-                gi['chromosome'] = parts[0]
+                gi['chromosome'] = parts[0].upper()
+                if gi['chromosome'] not in allowed_chr:
+                    continue
                 gi['source'] = parts[1]
                 gi['start'] = int(parts[3])
                 gi['stop'] = int(parts[4])
@@ -86,6 +91,42 @@ class Gene(object):
         query = ElasticQuery(Query.ids(list(genes.keys())))
         docs = Search(query, idx=idx, size=80000).search().docs
 
+        chunk_size = 450
+        for i in range(0, len(docs), chunk_size):
+            docs_chunk = docs[i:i+chunk_size]
+            json_data = ''
+            for doc in docs_chunk:
+                ens_id = doc._meta['_id']
+                idx_type = doc.type()
+                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                       "_index": idx, "_retry_on_conflict": 3}}
+                json_data += json.dumps(doc_data) + '\n'
+                json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
+            if json_data != '':
+                Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
+    def ensmart_gene_parse(cls, ensmart_f, idx):
+        genes = {}
+        count = 0
+        for ensmart in ensmart_f:
+            parts = ensmart.split('\t')
+            ens_id = parts[0]
+            gene_id = parts[1]
+            if gene_id == '':
+                continue
+            if ens_id in genes:
+                count += 1
+                genes.pop(ens_id, None)
+            else:
+                genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
+        query = ElasticQuery.filtered(Query.ids(list(genes.keys())),
+                                      Filter(Query({"missing": {"field": "dbxrefs.entrez"}})))
+
+        docs = Search(query, idx=idx, size=80000).search().docs
+        print(str(len(docs)))
+        print(len(docs))
+        print(len(list(genes.keys())))
         chunk_size = 450
         for i in range(0, len(docs), chunk_size):
             docs_chunk = docs[i:i+chunk_size]
