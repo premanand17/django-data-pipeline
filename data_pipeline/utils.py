@@ -118,6 +118,13 @@ class PostProcess(object):
                 json.dump(Gene.ensembl_gene_parse(ensembl_gene_f), outfile, indent=0)
 
     @classmethod
+    def ensmart_gene_parse(cls, *args, **kwargs):
+        ''' Parse result from ensembl mart. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as ensmart_f:
+            Gene.ensmart_gene_parse(ensmart_f, kwargs['section']['index'])
+
+    @classmethod
     def gene2ensembl_parse(cls, *args, **kwargs):
         ''' Parse gene2ensembl file from NCBI. '''
         download_file = cls._get_download_file(*args, **kwargs)
