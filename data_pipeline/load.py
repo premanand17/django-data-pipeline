@@ -27,7 +27,6 @@ class IndexLoad(IniParser):
         elif 'files' in section:
             stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
                                       section['files'] + '.json')
-            print(stage_file)
         else:
             return
 
