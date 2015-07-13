@@ -12,7 +12,7 @@ setup(
     name='data-pipeline',
     version='0.0.1',
     packages=find_packages(),
-    package_data={'data_pipeline': ['tests/*'], },
+    package_data={'data_pipeline': ['tests/*', 'tests/data/DOWNLOAD/INTACT/*zip'], },
     include_package_data=True,
     zip_safe=False,
     url='http://github.com/D-I-L/django-data-pipeline',
