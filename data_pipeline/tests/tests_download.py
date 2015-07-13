@@ -76,3 +76,10 @@ class DownloadTest(TestCase):
                                   query_filter=query_filter,
                                   tax='hsapiens_gene_ensembl', attrs=attrs),
             'Mart download')
+
+    def test_download_intact_file(self):
+        ''' Test ini file downloads. '''
+        out = StringIO()
+        ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        call_command('pipeline', '--steps', 'download', sections='INTACT', dir='/tmp', ini=ini_file, stdout=out)
+        self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")

@@ -28,6 +28,7 @@ class Command(BaseCommand):
                             nargs='+', required=True)
 
     def handle(self, *args, **options):
+        print(options)
 
         if 'download' in options['steps']:
             if options['ini']:
