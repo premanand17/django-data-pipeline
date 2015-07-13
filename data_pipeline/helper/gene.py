@@ -243,7 +243,7 @@ class Gene(object):
                 print('Extracting the zip file...')
                 target_path = zf.extract(member='intact.txt', path=abs_path_download_dir)
                 line_number = 0
-                with open(target_path) as csvfile:
+                with open(target_path, encoding='utf-8') as csvfile:
                     reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
                     for row in reader:
                             # print(row)
