@@ -27,6 +27,7 @@ class IndexLoad(IniParser):
         elif 'files' in section:
             stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
                                       section['files'] + '.json')
+            print(stage_file)
         else:
             return
 
@@ -34,4 +35,4 @@ class IndexLoad(IniParser):
             logger.error('File does not exist: '+stage_file)
             return
         logger.debug('Loading: '+stage_file + ' into ' + section['index'])
-        call_command('index_search', indexType='auto', indexJson=stage_file, indexName=section['index'])
+        call_command('index_search', indexType=section['index_type'], indexJson=stage_file, indexName=section['index'])

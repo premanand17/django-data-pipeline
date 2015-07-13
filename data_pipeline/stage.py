@@ -18,6 +18,7 @@ class Stage(IniParser):
     @post_process
     def process_section(self, section_name, section_dir_name, base_dir_path,
                         dir_path='.', section=None, stage='stage'):
+
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
         if 'output' in section:

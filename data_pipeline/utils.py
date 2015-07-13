@@ -13,6 +13,11 @@ import re
 import gzip
 import logging
 from data_pipeline.helper.gene import Gene
+import zipfile
+import csv
+import sys
+from elastic.management.loaders.mapping import MappingProperties
+import datetime
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
@@ -95,6 +100,19 @@ class PostProcess(object):
             return os.path.join(stage_dir, section['output'] + '.json')
         elif 'files' in section:
             return os.path.join(stage_dir, section['files'] + '.json')
+
+    @classmethod
+    def _get_stage_output_file(cls, *args, **kwargs):
+        section = kwargs['section']
+        section_dir_name = args[2]
+        base_dir_path = args[3]
+        stage_dir = os.path.join(base_dir_path, 'STAGE', section_dir_name)
+        if not os.path.exists(stage_dir):
+            os.makedirs(stage_dir)
+        if 'output' in section:
+            return os.path.join(stage_dir, section['stage_output'])
+        elif 'files' in section:
+            return os.path.join(stage_dir, section['files'] + '.out')
 
     @classmethod
     def _get_download_file(cls, *args, **kwargs):
@@ -195,8 +213,11 @@ class PostProcess(object):
                 os.remove(os.path.join(dir_path, fname))
 
     @classmethod
-    def psimitab(cls, *args, **kwargs):
-        print("Hello")
+    def gene_interaction_parse(cls, *args, **kwargs):
+        stage_output_file = cls._get_stage_output_file(*args, **kwargs)
+        download_file = cls._get_download_file(*args, **kwargs)
+        section = kwargs['section']
+        Gene.gene_interaction_parse(download_file, stage_output_file, section)
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
