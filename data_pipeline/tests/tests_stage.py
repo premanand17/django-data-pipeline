@@ -31,4 +31,3 @@ class StagingTest(TestCase):
         self.assertTrue(os.path.isfile(test_data_dir + '/STAGE/INTACT/intact.zip.out'))
         self.assertTrue(os.path.isfile(test_data_dir + '/STAGE/INTACT/intact.zip.json'))
         self.assertTrue(os.access(test_data_dir + '/STAGE/INTACT/intact.zip.json', os.R_OK))
- 

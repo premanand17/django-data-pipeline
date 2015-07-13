@@ -329,7 +329,7 @@ class Gene(object):
         print(json_target_file_path)
         # json_target_file_path = target_file_path + '.json'
 
-        load_mapping = True
+        load_mapping = False
         with open(json_target_file_path, mode='w', encoding='utf-8') as f:
             f.write('{"docs":[\n')
 
