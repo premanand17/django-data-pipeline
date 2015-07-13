@@ -6,7 +6,16 @@ from data_pipeline.load import IndexLoad
 
 
 class Command(BaseCommand):
-    help = "Download data file(s)."
+    ''' Command line for downloading and loading data.
+
+    For gene:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL_GENE --steps download stage load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE2ENSEMBL --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_GENE --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_INFO --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_PUBS --steps download load
+    '''
+    help = "Download data file(s)"
 
     def add_arguments(self, parser):
         parser.add_argument('--url',
