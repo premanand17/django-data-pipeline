@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Pubs():
+    ''' Publication class to define functions for building publication index. '''
 
     DUPLICATE_PMIDS = ['22543779']
 
