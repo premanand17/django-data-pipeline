@@ -1,3 +1,5 @@
+''' Used to generate the gene documents for indexing. '''
+
 import logging
 from builtins import classmethod
 import sys
@@ -18,6 +20,7 @@ class Gene(object):
 
     @classmethod
     def gene_mapping(cls, idx, idx_type):
+        ''' Load the mapping for the gene index. '''
         props = MappingProperties(idx_type)
         props.add_property("symbol", "string", analyzer="full_name") \
              .add_property("synonyms", "string", analyzer="full_name") \
