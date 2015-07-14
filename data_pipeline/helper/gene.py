@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class Gene(object):
+    ''' Gene class to define functions for building gene related indices. '''
 
     @classmethod
     def gene_mapping(cls, idx, idx_type):
