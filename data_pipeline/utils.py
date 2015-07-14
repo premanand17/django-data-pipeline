@@ -146,7 +146,8 @@ class PostProcess(object):
         ''' Parse result from ensembl mart. '''
         download_file = cls._get_download_file(*args, **kwargs)
         with open(download_file, 'rt') as ensmart_f:
-            Gene.ensmart_gene_parse(ensmart_f, kwargs['section']['index'])
+            Gene.ensmart_gene_parse(ensmart_f, kwargs['section']['index'],
+                                    kwargs['section']['index_type'])
 
     @classmethod
     def gene2ensembl_parse(cls, *args, **kwargs):

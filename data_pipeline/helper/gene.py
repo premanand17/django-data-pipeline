@@ -107,7 +107,7 @@ class Gene(object):
                 Loader().bulk_load(idx, idx_type, json_data)
 
     @classmethod
-    def ensmart_gene_parse(cls, ensmart_f, idx):
+    def ensmart_gene_parse(cls, ensmart_f, idx, idx_type):
         ''' For those gene docs missing a dbxrefs.entrez use Ensembl Mart to
         fill in. '''
         genes = {}
@@ -136,7 +136,7 @@ class Gene(object):
 
         '''  if entrez id exists '''
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, size=80000).search().docs
+        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
         chunk_size = 450
         for i in range(0, len(docs), chunk_size):
             docs_chunk = docs[i:i+chunk_size]
