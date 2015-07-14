@@ -49,6 +49,9 @@ class Monitor(object):
 
 
 def process_wrapper(*args, **kwargs):
+    ''' Wrapper to call a defined function in the ini file. Depending on the
+    stage (from the class L{Download}, L{Stage} or L{Load}) look for the ini
+    tag for that section. The tag defines the function name to be called. '''
     section = kwargs['section']
     ini_tag = None
     if kwargs['stage'] == 'Download':
@@ -84,9 +87,14 @@ def pre_process(func):
 
 
 class PostProcess(object):
+    ''' Used by L{post_process} and L{pre_process} decorators to be able to call
+    functions before or after the decorated function e.g. when processing
+    sections in the configuration (ini) files.
+    '''
 
     @classmethod
     def _get_stage_file(cls, *args, **kwargs):
+        ''' Return the location of the staged data file. '''
         section = kwargs['section']
         section_dir_name = args[2]
         base_dir_path = args[3]
@@ -113,6 +121,7 @@ class PostProcess(object):
 
     @classmethod
     def _get_download_file(cls, *args, **kwargs):
+        ''' Return the location of the downloaded data file. '''
         section = kwargs['section']
         section_dir_name = args[2]
         base_dir_path = args[3]
@@ -165,6 +174,8 @@ class PostProcess(object):
     ''' Marker downloads '''
     @classmethod
     def dbsnp_marker(cls, *args, **kwargs):
+        ''' Parse dbSNP VCF and use elastic loader to index
+        (L{elastic.management.loaders.marker.MarkerManager}). '''
         download_file = cls._get_download_file(*args, **kwargs)
         idx = kwargs['section']['index']
         idx_type = kwargs['section']['index_type']
@@ -172,6 +183,8 @@ class PostProcess(object):
 
     @classmethod
     def dbsnp_merge(cls, *args, **kwargs):
+        ''' Parse the history (rs_merge) from dbSNP and use the
+        elastic loader to index (L{elastic.management.loaders.marker.RsMerge}).'''
         download_file = cls._get_download_file(*args, **kwargs)
         idx = kwargs['section']['index']
         idx_type = kwargs['section']['index_type']
@@ -263,6 +276,7 @@ class PostProcess(object):
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
+        ''' Parse XML from eutils. '''
         section_name = args[1]
         section = kwargs['section']
         stage_file = cls._get_stage_file(*args, **kwargs)
