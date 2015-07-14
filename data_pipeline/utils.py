@@ -49,6 +49,8 @@ class Monitor(object):
 
 
 def process_wrapper(*args, **kwargs):
+    ''' Wrapper to call a defined function in the ini file. Depending on the
+    stage (download, stage or load) look for the ini tag for that section. '''
     section = kwargs['section']
     ini_tag = None
     if kwargs['stage'] == 'Download':
@@ -84,9 +86,14 @@ def pre_process(func):
 
 
 class PostProcess(object):
+    ''' Used by L{post_process} and L{pre_process} decorators to be able to call
+    functions before or after the decorated function e.g. when processing
+    sections in the configuration (ini) files.
+    '''
 
     @classmethod
     def _get_stage_file(cls, *args, **kwargs):
+        ''' Return the location of the staged data file. '''
         section = kwargs['section']
         section_dir_name = args[2]
         base_dir_path = args[3]
@@ -113,6 +120,7 @@ class PostProcess(object):
 
     @classmethod
     def _get_download_file(cls, *args, **kwargs):
+        ''' Return the location of the downloaded data file. '''
         section = kwargs['section']
         section_dir_name = args[2]
         base_dir_path = args[3]
