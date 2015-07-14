@@ -13,11 +13,8 @@ import re
 import gzip
 import logging
 from data_pipeline.helper.gene import Gene
-import zipfile
-import csv
-import sys
-from elastic.management.loaders.mapping import MappingProperties
-import datetime
+from builtins import classmethod
+from django.core.management import call_command
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
@@ -164,6 +161,21 @@ class PostProcess(object):
         download_file = cls._get_download_file(*args, **kwargs)
         with gzip.open(download_file, 'rt') as gene_pub_f:
             Gene.gene_pub_parse(gene_pub_f, kwargs['section']['index'])
+
+    ''' Marker downloads '''
+    @classmethod
+    def dbsnp_marker(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        call_command('index_search', indexType=idx_type, indexSNP=download_file, indexName=idx)
+
+    @classmethod
+    def dbsnp_merge(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        call_command('index_search', indexType=idx_type, indexSNPMerge=download_file, indexName=idx)
 
     ''' Publication methods '''
     @classmethod
