@@ -12,12 +12,16 @@ logger = logging.getLogger(__name__)
 class Command(BaseCommand):
     ''' Command line for downloading and loading data.
 
-    For gene:
+    Gene:
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL_GENE --steps download stage load
     ./manage.py pipeline --dir tmp --ini download.ini --sections GENE2ENSEMBL --steps download load
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_GENE --steps download load
     ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_INFO --steps download load
     ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_PUBS --steps download load
+
+    Marker:
+    ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections DBSNP --steps download load
+    ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections RSMERGEARCH --steps download load
     '''
     help = "Download data file(s)"
 
