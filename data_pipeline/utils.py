@@ -153,7 +153,8 @@ class PostProcess(object):
         ''' Parse gene2ensembl file from NCBI. '''
         download_file = cls._get_download_file(*args, **kwargs)
         with gzip.open(download_file, 'rt') as gene2ens_f:
-            Gene.gene2ensembl_parse(gene2ens_f, kwargs['section']['index'])
+            Gene.gene2ensembl_parse(gene2ens_f, kwargs['section']['index'],
+                                    kwargs['section']['index_type'])
 
     @classmethod
     def gene_info_parse(cls, *args, **kwargs):
