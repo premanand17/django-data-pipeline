@@ -50,7 +50,8 @@ class Monitor(object):
 
 def process_wrapper(*args, **kwargs):
     ''' Wrapper to call a defined function in the ini file. Depending on the
-    stage (download, stage or load) look for the ini tag for that section. '''
+    stage (from the class L{Download}, L{Stage} or L{Load}) look for the ini
+    tag for that section. The tag defines the function name to be called. '''
     section = kwargs['section']
     ini_tag = None
     if kwargs['stage'] == 'Download':
