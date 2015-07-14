@@ -8,7 +8,7 @@ import re
 import zipfile
 import os
 from elastic.search import ElasticQuery, Search
-from elastic.query import Query, TermsFilter, Filter
+from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 import json
@@ -34,8 +34,7 @@ class Gene(object):
              .add_property("biotype", "string") \
              .add_property("nomenclature_authority_symbol", "string") \
              .add_property("dbxrefs", "object") \
-             .add_property("pmids", "object") \
-             .add_property("protein_id", "string")
+             .add_property("pmids", "object")
 
         ''' create index and add mapping '''
         load = Loader()
@@ -78,28 +77,20 @@ class Gene(object):
         return gene_list
 
     @classmethod
-    def gene2ensembl_parse(cls, gene2ens, idx):
-        ''' Parse gene2ensembl file from NCBI and add entrez and protein_id's to gene index. '''
+    def gene2ensembl_parse(cls, gene2ens, idx, idx_type):
+        ''' Parse gene2ensembl file from NCBI and add entrez to gene index. '''
         genes = {}
         for gene in gene2ens:
             if gene.startswith('9606\t'):
                 parts = gene.split('\t')
                 gene_id = parts[1]
                 ens_id = parts[2]
-                prot_acc = parts[5]
-                if ens_id in genes:
-                    if prot_acc != '-':
-                        if 'protein_id' in genes[ens_id]:
-                            genes[ens_id]['protein_id'].append(prot_acc)
-                        else:
-                            genes[ens_id].update({'protein_id': [prot_acc]})
-                else:
+#                 prot_acc = parts[5]
+                if ens_id not in genes:
                     genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
-                    if prot_acc != '-':
-                        genes[ens_id].update({'protein_id': [prot_acc]})
 
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, size=80000).search().docs
+        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
 
         chunk_size = 450
         for i in range(0, len(docs), chunk_size):
@@ -120,31 +111,49 @@ class Gene(object):
         ''' For those gene docs missing a dbxrefs.entrez use Ensembl Mart to
         fill in. '''
         genes = {}
-        count = 0
         for ensmart in ensmart_f:
             parts = ensmart.split('\t')
             ens_id = parts[0]
             gene_id = parts[1]
+            swissprot = parts[2].strip()
+            trembl = parts[3].strip()
             if gene_id == '':
                 continue
             if ens_id in genes:
-                count += 1
-                genes.pop(ens_id, None)
+                if genes[ens_id]['dbxrefs']['entrez'] != gene_id:
+                    genes[ens_id]['dbxrefs']['entrez'] = None
+                else:
+                    if swissprot != '':
+                        cls._add_to_dbxref(genes[ens_id], 'swissprot', swissprot)
+                    if trembl != '':
+                        cls._add_to_dbxref(genes[ens_id], 'trembl', trembl)
             else:
                 genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
-        query = ElasticQuery.filtered(Query.ids(list(genes.keys())),
-                                      Filter(Query({"missing": {"field": "dbxrefs.entrez"}})))
+                if swissprot != '':
+                    genes[ens_id]['dbxrefs'].update({'swissprot': swissprot})
+                if trembl != '':
+                    genes[ens_id]['dbxrefs'].update({'trembl': trembl})
 
+        '''  if entrez id exists '''
+        query = ElasticQuery(Query.ids(list(genes.keys())))
         docs = Search(query, idx=idx, size=80000).search().docs
-        print(str(len(docs)))
-        print(len(docs))
-        print(len(list(genes.keys())))
         chunk_size = 450
         for i in range(0, len(docs), chunk_size):
             docs_chunk = docs[i:i+chunk_size]
             json_data = ''
             for doc in docs_chunk:
                 ens_id = doc._meta['_id']
+                if 'dbxrefs' in doc.__dict__:
+                    dbxrefs = getattr(doc, 'dbxrefs')
+                else:
+                    dbxrefs = {}
+
+                if ('entrez' in genes[ens_id]['dbxrefs'] and
+                    'entrez' in dbxrefs and
+                   dbxrefs['entrez'] != genes[ens_id]['dbxrefs']['entrez']):
+                    logger.warn('Multiple entrez ids for ensembl id: '+ens_id)
+                    continue
+
                 idx_type = doc.type()
                 doc_data = {"update": {"_id": ens_id, "_type": idx_type,
                                        "_index": idx, "_retry_on_conflict": 3}}
@@ -152,6 +161,15 @@ class Gene(object):
                 json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
             if json_data != '':
                 Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
+    def _add_to_dbxref(cls, gene, db, dbxref):
+        if db in gene['dbxrefs']:
+            if not isinstance(gene['dbxrefs'][db], list):
+                gene['dbxrefs'][db] = [gene['dbxrefs'][db]]
+            gene['dbxrefs'][db].append(dbxref)
+        else:
+            gene['dbxrefs'].update({db: dbxref})
 
     @classmethod
     def gene_info_parse(cls, gene_infos, idx):
@@ -219,8 +237,11 @@ class Gene(object):
             if len(dbx) != 2:
                 logger.warn('DBXREF PARSE: '+dbxref)
                 continue
-            db = dbx[0].replace('HGNC:HGNC', 'HGNC')
-            arr[db.lower()] = dbx[1]
+            dbx[0] = dbx[0].lower()
+            if dbx[0] == 'ensembl':
+                continue
+            db = dbx[0].replace('hgnc:hgnc', 'hgnc')
+            arr[db] = dbx[1]
         gi['dbxrefs'] = arr
 
     @classmethod
