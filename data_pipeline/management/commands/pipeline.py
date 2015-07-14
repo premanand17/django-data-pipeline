@@ -3,6 +3,10 @@ from django.core.management.base import BaseCommand, CommandError
 from data_pipeline.download import Download
 from data_pipeline.stage import Stage
 from data_pipeline.load import IndexLoad
+import logging
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -37,8 +41,7 @@ class Command(BaseCommand):
                             nargs='+', required=True)
 
     def handle(self, *args, **options):
-        print(options)
-
+        logger.debug(options)
         if 'download' in options['steps']:
             if options['ini']:
                 if not options['dir']:
