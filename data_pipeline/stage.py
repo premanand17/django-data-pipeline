@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Stage(IniParser):
-    ''' Load into Elastic '''
+    ''' Used to stage data in preparation for loading. '''
 
     def stage(self, ini_file, dir_path, sections=None):
         ''' Download data defined in the ini file. '''

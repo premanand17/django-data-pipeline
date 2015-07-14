@@ -165,6 +165,8 @@ class PostProcess(object):
     ''' Marker downloads '''
     @classmethod
     def dbsnp_marker(cls, *args, **kwargs):
+        ''' Parse dbSNP VCF and use elastic loader to index
+        (L{elastic.management.loaders.marker.MarkerManager}). '''
         download_file = cls._get_download_file(*args, **kwargs)
         idx = kwargs['section']['index']
         idx_type = kwargs['section']['index_type']
@@ -172,6 +174,8 @@ class PostProcess(object):
 
     @classmethod
     def dbsnp_merge(cls, *args, **kwargs):
+        ''' Parse the history (rs_merge) from dbSNP and use the
+        elastic loader to index (L{elastic.management.loaders.marker.RsMerge}).'''
         download_file = cls._get_download_file(*args, **kwargs)
         idx = kwargs['section']['index']
         idx_type = kwargs['section']['index_type']
@@ -263,6 +267,7 @@ class PostProcess(object):
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
+        ''' Parse XML from eutils. '''
         section_name = args[1]
         section = kwargs['section']
         stage_file = cls._get_stage_file(*args, **kwargs)
