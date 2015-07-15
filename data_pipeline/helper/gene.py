@@ -134,7 +134,7 @@ class Gene(object):
                 if trembl != '':
                     genes[ens_id]['dbxrefs'].update({'trembl': trembl})
 
-        '''  if entrez id exists '''
+        '''  search for the entrez ids '''
         query = ElasticQuery(Query.ids(list(genes.keys())))
         docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
         chunk_size = 450
