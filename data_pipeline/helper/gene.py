@@ -32,9 +32,8 @@ class Gene(object):
              .add_property("strand", "string") \
              .add_property("description", "string") \
              .add_property("biotype", "string") \
-             .add_property("nomenclature_authority_symbol", "string") \
              .add_property("dbxrefs", "object") \
-             .add_property("pmids", "object")
+             .add_property("pmids", "string")
 
         ''' create index and add mapping '''
         load = Loader()
@@ -166,7 +165,11 @@ class Gene(object):
     def _add_to_dbxref(cls, gene, db, dbxref):
         if db in gene['dbxrefs']:
             if not isinstance(gene['dbxrefs'][db], list):
+                if dbxref == gene['dbxrefs'][db]:
+                    return
                 gene['dbxrefs'][db] = [gene['dbxrefs'][db]]
+            elif dbxref in gene['dbxrefs'][db]:
+                return
             gene['dbxrefs'][db].append(dbxref)
         else:
             gene['dbxrefs'].update({db: dbxref})
@@ -198,9 +201,9 @@ class Gene(object):
             parts = gene_pub.split('\t')
             pmid = parts[2].strip()
             if parts[1] in genes:
-                genes[parts[1]]["PMID"].append(pmid)
+                genes[parts[1]]["pmids"].append(pmid)
             else:
-                genes[parts[1]] = {"PMID": [pmid]}
+                genes[parts[1]] = {"pmids": [pmid]}
         cls._update_gene(genes, idx)
 
     @classmethod
