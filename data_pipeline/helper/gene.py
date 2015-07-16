@@ -17,7 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 class Gene(object):
-    ''' Gene class to define functions for building gene related indices. '''
+    ''' Gene class to define functions for building gene related indices.
+
+    The gene index is built by parsing the following:
+    1. Ensembl gene GTF (ensembl_id, symbol, biotype, chromosome, source, start, stop, strand)
+    2. NCBI gene2ensembl (entrez id)
+    3. Ensembl Mart (missing entrez ids, swissprot, trembl)
+    4. NCBI gene_info (synonyms, dbxrefs, description)
+    5. NCBI gene2pubmed (pmids)
+    '''
 
     @classmethod
     def gene_mapping(cls, idx, idx_type):
