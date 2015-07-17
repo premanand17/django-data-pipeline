@@ -249,8 +249,8 @@ class Gene(object):
                 logger.warn('DBXREF PARSE: '+dbxref)
                 continue
             dbx[0] = dbx[0].lower()
-            if dbx[0] == 'ensembl':
-                continue
+#             if dbx[0] == 'ensembl':
+#                 continue
             db = dbx[0].replace('hgnc:hgnc', 'hgnc')
             arr[db] = dbx[1]
         gi['dbxrefs'] = arr
