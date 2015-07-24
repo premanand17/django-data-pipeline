@@ -34,7 +34,7 @@ class Pubs():
         count = 0
         mapping = {
             "_id": {"type": "integer"},
-            "PMID": {"type": "integer"},
+            "pmid": {"type": "integer"},
             "tags": {"type": "object", "index": "not_analyzed"},
             "journal": {"type": "string"},
             "title": {"type": "string"},
@@ -77,7 +77,7 @@ class Pubs():
 
                     keys_not_found = [k for k in mapping_keys if k not in pub_obj]
                     if len(keys_not_found) > 0:
-                        logger.warn("PMID: "+pub_obj['PMID']+' not found: '+str(keys_not_found))
+                        logger.warn("PMID: "+pub_obj['pmid']+' not found: '+str(keys_not_found))
                     f.write(json.dumps(pub_obj))
                     count += 1
 
@@ -96,7 +96,7 @@ class Pubs():
     @classmethod
     def _parse_pubmed_record(cls, pub):
         pmid = pub.find('PMID').text
-        pub_obj = {'PMID': pmid, '_id': pmid}
+        pub_obj = {'pmid': pmid, '_id': pmid}
         article = pub.find('Article')
         if article is not None:
             pub_obj['title'] = article.find('ArticleTitle').text
@@ -153,14 +153,13 @@ class Pubs():
         try:
             for author in authors:
                 try:
-                    author_obj = {'LastName': author.find('LastName').text,
-                                  'ForeName': author.find('ForeName').text}
+                    author_obj = {'name': author.find('ForeName').text + ' ' + author.find('LastName').text}
                 except AttributeError:
                     if author.find('LastName') is None:
                         continue
-                    author_obj = {'LastName': author.find('LastName').text}
+                    author_obj = {'name': author.find('LastName').text}
                 if author.find('Initials') is not None:
-                    author_obj.update({'Initials': author.find('Initials').text})
+                    author_obj.update({'initials': author.find('Initials').text})
                 authors_arr.append(author_obj)
             pub_obj['authors'] = authors_arr
         except TypeError:
@@ -238,4 +237,4 @@ class Pubs():
 
             pub_obj['date'] = date
         else:
-            logger.warn("Date not found for PMID:"+pub_obj["PMID"])
+            logger.warn("Date not found for PMID:"+pub_obj["pmid"])
