@@ -203,14 +203,14 @@ class PostProcess(object):
 
         for i in range(0, len(pmids), chunk_size):
             pmids_slice = pmids[i:i+chunk_size]
-            terms_filter = TermsFilter.get_terms_filter("PMID", pmids_slice)
-            query = ElasticQuery.filtered(Query.match_all(), terms_filter, sources=['PMID', 'tags'])
+            terms_filter = TermsFilter.get_terms_filter("pmid", pmids_slice)
+            query = ElasticQuery.filtered(Query.match_all(), terms_filter, sources=['pmid', 'tags'])
 
             docs = Search(query, idx=idx, size=chunk_size).search().docs
             json_data = ''
 
             for doc in docs:
-                pmids_found_add(getattr(doc, 'PMID'))
+                pmids_found_add(getattr(doc, 'pmid'))
                 if disease_code is not None:
                     tags = getattr(doc, 'tags')
                     if 'disease' in tags:
