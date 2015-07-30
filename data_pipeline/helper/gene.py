@@ -41,7 +41,9 @@ class Gene(object):
              .add_property("description", "string") \
              .add_property("biotype", "string") \
              .add_property("dbxrefs", "object") \
-             .add_property("pmids", "string")
+             .add_property("pmids", "string") \
+             .add_property("suggest", "completion",
+                           index_analyzer="full_name", search_analyzer="full_name")
 
         ''' create index and add mapping '''
         load = Loader()
@@ -196,7 +198,15 @@ class Gene(object):
                 gene = {"synonyms": parts[4].split("|")}
                 cls._set_dbxrefs(parts[1], parts[5], gene)
                 gene.update({"description": parts[8]})
+                suggests = parts[4].split("|")
+                if 'dbxrefs' in gene:
+                    suggests.extend(list(gene['dbxrefs'].values()))
+                suggests.append(parts[2])
+                gene['suggest'] = {}
+                gene['suggest']["input"] = suggests
+                gene['suggest']["weight"] = 50
                 genes[parts[1]] = gene
+
         cls._update_gene(genes, idx)
 
     @classmethod
