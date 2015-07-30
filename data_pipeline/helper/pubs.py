@@ -40,8 +40,10 @@ class Pubs():
             "title": {"type": "string"},
             "date": {"type": "date"},
             "authors": {"type": "object"},
-            "abstract": {"type": "string"}
+            "abstract": {"type": "string"},
+            "suggest": {"type": "completion"}
                    }
+
         mapping_keys = mapping.keys()
         start = time.time()
 
@@ -79,6 +81,7 @@ class Pubs():
                     if len(keys_not_found) > 0:
                         logger.warn("PMID: "+pub_obj['pmid']+' not found: '+str(keys_not_found))
                     f.write(json.dumps(pub_obj))
+#                     print(pub_obj['pmid'])
                     count += 1
 
                 time_taken = time.time() - start
@@ -150,10 +153,16 @@ class Pubs():
     def get_authors(cls, pub_obj, authors, pmid):
         ''' Add the author list to the publication object. '''
         authors_arr = []
+        lastnames = []
         try:
             for author in authors:
                 try:
-                    author_obj = {'name': author.find('ForeName').text + ' ' + author.find('LastName').text}
+                    lastname = author.find('LastName').text.title()
+                    forename = author.find('ForeName').text.title()
+                    lastnames.append(lastname)
+                    if not lastname.startswith(forename+' '):
+                        lastname = forename + ' ' + lastname
+                    author_obj = {'name': lastname}
                 except AttributeError:
                     if author.find('LastName') is None:
                         continue
@@ -162,6 +171,8 @@ class Pubs():
                     author_obj.update({'initials': author.find('Initials').text})
                 authors_arr.append(author_obj)
             pub_obj['authors'] = authors_arr
+            if len(lastnames) > 0:
+                pub_obj['suggest'] = {"input": lastnames}
         except TypeError:
             logger.warn('No authors found for PMID:'+pmid)
 
