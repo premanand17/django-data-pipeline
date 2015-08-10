@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class GeneInteractions(Gene):
 
-    ''' GeneInteractions class to define functions for building interations index type within gene index
+    ''' GeneInteractions class define functions for building interations index type within gene index
 
     The interations index type is currently built by parsing the following:
     1. Refer section [INTACT] in download.ini for source files
