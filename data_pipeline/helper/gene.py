@@ -1,3 +1,5 @@
+''' Used to generate the gene documents for indexing. '''
+
 import logging
 from builtins import classmethod
 import sys
@@ -6,7 +8,7 @@ import re
 import zipfile
 import os
 from elastic.search import ElasticQuery, Search
-from elastic.query import Query, TermsFilter, Filter
+from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 import json
@@ -15,9 +17,19 @@ logger = logging.getLogger(__name__)
 
 
 class Gene(object):
+    ''' Gene class to define functions for building gene related indices.
+
+    The gene index is built by parsing the following:
+    1. Ensembl gene GTF (ensembl_id, symbol, biotype, chromosome, source, start, stop, strand)
+    2. NCBI gene2ensembl (entrez id)
+    3. Ensembl Mart (missing entrez ids, swissprot, trembl)
+    4. NCBI gene_info (synonyms, dbxrefs, description)
+    5. NCBI gene2pubmed (pmids)
+    '''
 
     @classmethod
     def gene_mapping(cls, idx, idx_type):
+        ''' Load the mapping for the gene index. '''
         props = MappingProperties(idx_type)
         props.add_property("symbol", "string", analyzer="full_name") \
              .add_property("synonyms", "string", analyzer="full_name") \
@@ -28,10 +40,10 @@ class Gene(object):
              .add_property("strand", "string") \
              .add_property("description", "string") \
              .add_property("biotype", "string") \
-             .add_property("nomenclature_authority_symbol", "string") \
              .add_property("dbxrefs", "object") \
-             .add_property("pmids", "object") \
-             .add_property("protein_id", "string")
+             .add_property("pmids", "string") \
+             .add_property("suggest", "completion",
+                           index_analyzer="full_name", search_analyzer="full_name")
 
         ''' create index and add mapping '''
         load = Loader()
@@ -74,28 +86,20 @@ class Gene(object):
         return gene_list
 
     @classmethod
-    def gene2ensembl_parse(cls, gene2ens, idx):
-        ''' Parse gene2ensembl file from NCBI and add entrez and protein_id's to gene index. '''
+    def gene2ensembl_parse(cls, gene2ens, idx, idx_type):
+        ''' Parse gene2ensembl file from NCBI and add entrez to gene index. '''
         genes = {}
         for gene in gene2ens:
             if gene.startswith('9606\t'):
                 parts = gene.split('\t')
                 gene_id = parts[1]
                 ens_id = parts[2]
-                prot_acc = parts[5]
-                if ens_id in genes:
-                    if prot_acc != '-':
-                        if 'protein_id' in genes[ens_id]:
-                            genes[ens_id]['protein_id'].append(prot_acc)
-                        else:
-                            genes[ens_id].update({'protein_id': [prot_acc]})
-                else:
+#                 prot_acc = parts[5]
+                if ens_id not in genes:
                     genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
-                    if prot_acc != '-':
-                        genes[ens_id].update({'protein_id': [prot_acc]})
 
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, size=80000).search().docs
+        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
 
         chunk_size = 450
         for i in range(0, len(docs), chunk_size):
@@ -112,35 +116,53 @@ class Gene(object):
                 Loader().bulk_load(idx, idx_type, json_data)
 
     @classmethod
-    def ensmart_gene_parse(cls, ensmart_f, idx):
+    def ensmart_gene_parse(cls, ensmart_f, idx, idx_type):
         ''' For those gene docs missing a dbxrefs.entrez use Ensembl Mart to
         fill in. '''
         genes = {}
-        count = 0
         for ensmart in ensmart_f:
             parts = ensmart.split('\t')
             ens_id = parts[0]
             gene_id = parts[1]
+            swissprot = parts[2].strip()
+            trembl = parts[3].strip()
             if gene_id == '':
                 continue
             if ens_id in genes:
-                count += 1
-                genes.pop(ens_id, None)
+                if genes[ens_id]['dbxrefs']['entrez'] != gene_id:
+                    genes[ens_id]['dbxrefs']['entrez'] = None
+                else:
+                    if swissprot != '':
+                        cls._add_to_dbxref(genes[ens_id], 'swissprot', swissprot)
+                    if trembl != '':
+                        cls._add_to_dbxref(genes[ens_id], 'trembl', trembl)
             else:
                 genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
-        query = ElasticQuery.filtered(Query.ids(list(genes.keys())),
-                                      Filter(Query({"missing": {"field": "dbxrefs.entrez"}})))
+                if swissprot != '':
+                    genes[ens_id]['dbxrefs'].update({'swissprot': swissprot})
+                if trembl != '':
+                    genes[ens_id]['dbxrefs'].update({'trembl': trembl})
 
-        docs = Search(query, idx=idx, size=80000).search().docs
-        print(str(len(docs)))
-        print(len(docs))
-        print(len(list(genes.keys())))
+        '''  search for the entrez ids '''
+        query = ElasticQuery(Query.ids(list(genes.keys())))
+        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
         chunk_size = 450
         for i in range(0, len(docs), chunk_size):
             docs_chunk = docs[i:i+chunk_size]
             json_data = ''
             for doc in docs_chunk:
                 ens_id = doc._meta['_id']
+                if 'dbxrefs' in doc.__dict__:
+                    dbxrefs = getattr(doc, 'dbxrefs')
+                else:
+                    dbxrefs = {}
+
+                if ('entrez' in genes[ens_id]['dbxrefs'] and
+                    'entrez' in dbxrefs and
+                   dbxrefs['entrez'] != genes[ens_id]['dbxrefs']['entrez']):
+                    logger.warn('Multiple entrez ids for ensembl id: '+ens_id)
+                    continue
+
                 idx_type = doc.type()
                 doc_data = {"update": {"_id": ens_id, "_type": idx_type,
                                        "_index": idx, "_retry_on_conflict": 3}}
@@ -148,6 +170,19 @@ class Gene(object):
                 json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
             if json_data != '':
                 Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
+    def _add_to_dbxref(cls, gene, db, dbxref):
+        if db in gene['dbxrefs']:
+            if not isinstance(gene['dbxrefs'][db], list):
+                if dbxref == gene['dbxrefs'][db]:
+                    return
+                gene['dbxrefs'][db] = [gene['dbxrefs'][db]]
+            elif dbxref in gene['dbxrefs'][db]:
+                return
+            gene['dbxrefs'][db].append(dbxref)
+        else:
+            gene['dbxrefs'].update({db: dbxref})
 
     @classmethod
     def gene_info_parse(cls, gene_infos, idx):
@@ -163,7 +198,15 @@ class Gene(object):
                 gene = {"synonyms": parts[4].split("|")}
                 cls._set_dbxrefs(parts[1], parts[5], gene)
                 gene.update({"description": parts[8]})
+                suggests = parts[4].split("|")
+                if 'dbxrefs' in gene:
+                    suggests.extend(list(gene['dbxrefs'].values()))
+                suggests.append(parts[2])
+                gene['suggest'] = {}
+                gene['suggest']["input"] = suggests
+                gene['suggest']["weight"] = 50
                 genes[parts[1]] = gene
+
         cls._update_gene(genes, idx)
 
     @classmethod
@@ -176,9 +219,9 @@ class Gene(object):
             parts = gene_pub.split('\t')
             pmid = parts[2].strip()
             if parts[1] in genes:
-                genes[parts[1]]["PMID"].append(pmid)
+                genes[parts[1]]["pmids"].append(pmid)
             else:
-                genes[parts[1]] = {"PMID": [pmid]}
+                genes[parts[1]] = {"pmids": [pmid]}
         cls._update_gene(genes, idx)
 
     @classmethod
@@ -215,180 +258,9 @@ class Gene(object):
             if len(dbx) != 2:
                 logger.warn('DBXREF PARSE: '+dbxref)
                 continue
-            db = dbx[0].replace('HGNC:HGNC', 'HGNC')
-            arr[db.lower()] = dbx[1]
+            dbx[0] = dbx[0].lower()
+#             if dbx[0] == 'ensembl':
+#                 continue
+            db = dbx[0].replace('hgnc:hgnc', 'hgnc')
+            arr[db] = dbx[1]
         gi['dbxrefs'] = arr
-
-    @classmethod
-    def gene_interaction_parse(cls, download_file, stage_output_file, section):
-        cls._psimitab(download_file, stage_output_file, section)
-
-    @classmethod
-    def _psimitab(cls, download_file, stage_output_file, section):
-        abs_path_download_dir = os.path.dirname(download_file)
-        zf = zipfile.ZipFile(download_file, 'r')
-        # print(zf.namelist())
-
-        import_file_exists = False
-        # target_path = '/dunwich/scratch/prem/tmp/download/intact.txt'
-
-        if import_file_exists is not True:
-            stage_output_file_handler = open(stage_output_file, 'w')
-            header_line = 'interactorA' + '\t' + 'interactorB' + '\t' + 'pubmed' + '\n'
-
-            stage_output_file_handler.write(header_line)
-
-            if 'intact.txt' in zf.namelist():
-                # base_dir_path = args[3]
-                print('Extracting the zip file...')
-                target_path = zf.extract(member='intact.txt', path=abs_path_download_dir)
-                line_number = 0
-                with open(target_path, encoding='utf-8') as csvfile:
-                    reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
-                    for row in reader:
-                            # print(row)
-                            # check for taxid
-                            re.compile('taxid:9606')
-                            is_human_A = cls._check_tax_id(row['Taxid interactor A'], 'taxid:9606')
-                            is_human_B = cls._check_tax_id(row['Taxid interactor B'], 'taxid:9606')
-
-                            if is_human_A and is_human_B:
-                                pass
-                            else:
-                                continue
-
-                            # check for pubmed id/evidence
-                            cleaned_pubmed_id = cls._clean_id(row['Publication Identifier(s)'], 'pubmed:\d+')
-
-                            if cleaned_pubmed_id is None:
-                                cleaned_pubmed_id = ''
-                            # xref id
-                            cleaned_xref_id_A = cls._clean_id(row['Xref(s) interactor A'], 'ensembl:ENSG\d+')
-                            cleaned_xref_id_B = cls._clean_id(row['Xref(s) interactor B'], 'ensembl:ENSG\d+')
-
-                            if (cleaned_xref_id_A is not None and
-                               cleaned_xref_id_B is not None and
-                               cleaned_xref_id_A != cleaned_xref_id_B):
-                                line_number += 1
-                                line = cleaned_xref_id_A + '\t' + cleaned_xref_id_B + '\t' + cleaned_pubmed_id + '\n'
-                                stage_output_file_handler.write(line)
-
-                stage_output_file_handler.close()
-                cls._process_interaction_out_file(stage_output_file, section)
-        else:
-            cls._process_interaction_out_file(stage_output_file, section)
-
-    @classmethod
-    def _process_interaction_out_file(cls, target_path, section):
-        print('_process_interaction_out_file file called...start processing')
-
-        dict_container = dict()
-        line_number = 0
-
-        with open(target_path) as csvfile:
-            reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
-            for row in reader:
-                line_number += 1
-                sys.stdout.write('.')
-                # print(row)
-                cleaned_xref_id_A = row['interactorA']
-                cleaned_xref_id_B = row['interactorB']
-                cleaned_pubmed_id = row['pubmed']
-
-                if cleaned_xref_id_A == cleaned_xref_id_B:
-                    continue
-
-                dict_interactorA = {'interactor': cleaned_xref_id_A, 'pubmed': cleaned_pubmed_id}
-                dict_interactorB = {'interactor': cleaned_xref_id_B, 'pubmed': cleaned_pubmed_id}
-
-                if cleaned_xref_id_A in dict_container:
-                    current_A = dict_container[cleaned_xref_id_A]
-                    if dict_interactorB not in current_A:
-                        current_A.append(dict_interactorB)
-                        dict_container[cleaned_xref_id_A] = current_A
-                else:
-                    dict_container[cleaned_xref_id_A] = [dict_interactorB]
-
-                if cleaned_xref_id_B in dict_container:
-                    current_B = dict_container[cleaned_xref_id_B]
-                    if dict_interactorA not in current_B:
-                        current_B.append(dict_interactorA)
-                        dict_container[cleaned_xref_id_B] = current_B
-                else:
-                    dict_container[cleaned_xref_id_B] = [dict_interactorA]
-
-            cls._create_json_output(dict_container, target_path, section)
-            print('GENE INTERACTION STAGE COMPLETE')
-
-    @classmethod
-    def _create_json_output(cls, dict_container, target_file_path, section):
-        count = 0
-        dict_keys = dict_container.keys()
-        print('No of docs to load ' + str(len(dict_keys)))
-        json_target_file_path = target_file_path.replace(".out", ".json")
-        print(json_target_file_path)
-        # json_target_file_path = target_file_path + '.json'
-
-        load_mapping = False
-        with open(json_target_file_path, mode='w', encoding='utf-8') as f:
-            f.write('{"docs":[\n')
-
-            for gene in dict_container:
-                int_object = dict()
-                int_object["_id"] = gene
-                int_object["_parent"] = gene
-                int_object["interactors"] = dict_container[gene]
-                int_object["interaction_source"] = section['source']
-                f.write(json.dumps(int_object))
-                count += 1
-
-                if len(dict_keys) == count:
-                    f.write('\n')
-                else:
-                    f.write(',\n')
-
-            f.write('\n]}')
-        logger.debug("No. genes to load "+str(count))
-        logger.debug("Json written to " + json_target_file_path)
-        logger.debug("Load mappings")
-
-        if load_mapping:
-            status = cls._load_interaction_mappings(section)
-            print(str(status))
-
-    @classmethod
-    def _load_interaction_mappings(cls, section):
-        interaction_mapping = MappingProperties("interactions", "gene")
-        interaction_mapping.add_property("interactors", "object", index="not_analyzed")
-        interaction_mapping.add_property("interaction_source", "string")
-        load = Loader()
-        idx = section['index']
-        options = {"indexName": idx, "shards": 1}
-        status = load.mapping(interaction_mapping, "interactions", **options)
-        return status
-
-    @classmethod
-    def _check_tax_id(cls, search_str, idpattern):
-        p = re.compile(idpattern)
-        m = p.search(search_str)
-
-        if m:
-            return True
-        else:
-            return False
-
-    @classmethod
-    def _clean_id(cls, search_str, idpattern):
-        p = re.compile(idpattern)
-        m = p.search(search_str)
-        matched_id = ''
-        if m:
-            # print('Match found: ', m.group())
-            matched_id = m.group()
-            split_id = matched_id.split(sep=':')
-            if split_id:
-                return split_id[1]
-        else:
-            pass
-
-        return None
