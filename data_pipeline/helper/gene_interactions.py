@@ -1,0 +1,285 @@
+import logging
+from builtins import classmethod
+import sys
+import csv
+import re
+import zipfile
+import os
+from elastic.management.loaders.mapping import MappingProperties
+from elastic.management.loaders.loader import Loader
+import json
+from data_pipeline.helper.gene import Gene
+
+logger = logging.getLogger(__name__)
+
+
+class GeneInteractions(Gene):
+
+    ''' GeneInteractions class to define functions for building interations index type within gene index
+
+    The interations index type is currently built by parsing the following:
+    1. Refer section [INTACT] in download.ini for source files
+    2. Refer section [BIOPLEX] in download.ini for source files
+
+    Note: Most of the interaction data sources stores the interactions as binary interactions
+    GeneA     GeneB
+    100       728378
+    100       345651
+    645121    3312
+    645121    55132
+    645121    1020
+
+    These files are parsed and entrezids are converted to ensemblids where needed.
+    The interactors are grouped/clustered as below
+
+    Grouping/clustering:
+    100 => [728378, 345651]
+    645121 => [3312, 55132, 1020]
+
+    Final JSON structure that will be loaded
+    {"interaction_source": "bioplex", "interactors": [{"interactor": "ENSG00000143416"},
+                                                  {"interactor": "ENSG00000102043"},
+                                                  {"interactor": "ENSG00000079387"},
+                                                  {"interactor": "ENSG00000187231"}],
+                                                  "_parent": "ENSG00000152213"}
+    '''
+
+    @classmethod
+    def gene_interaction_parse(cls, download_file, stage_output_file, section):
+        '''Function to delegate parsing of gene interaction files based on the file formats eg: psimitab'''
+        if str(section._name) == "INTACT":
+            cls._psimitab(download_file, stage_output_file, section)
+        if str(section._name) == "BIOPLEX":
+            cls._process_bioplex(download_file, stage_output_file, section)
+
+    @classmethod
+    def _process_bioplex(cls, download_file, stage_output_file, section):
+        '''Function to process bioplex data files. Interactors are in first two columns, they are converted to
+        ensembl ids and stored in temperory.out files
+        Input File format:
+        GeneA    GeneB    UniprotA    UniprotB    SymbolA    SymbolB    pW    pNI    pInt
+        100    728378    P00813    A5A3E0    ADA    POTEF    2.38086E-09    0.000331856    0.999668142
+        100    345651    P00813    Q562R1    ADA    ACTBL2    9.79E-18    0.211914437    0.788085563
+
+        Output file format:
+        interactorA    interactorB
+        ENSG00000196839    ENSG00000196604
+        ENSG00000196839    ENSG00000169067
+        '''
+        stage_output_file_handler = open(stage_output_file, 'w')
+        mapped_counter = 0
+        unmapped_counter = 0
+        unmapped_ids = []
+        header_line = 'interactorA' + '\t' + 'interactorB\n'
+        stage_output_file_handler.write(header_line)
+
+        with open(download_file, encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+                    for row in reader:
+                        gene_sets = []
+                        interactor_a = row['GeneA']
+                        interactor_b = row['GeneB']
+                        gene_sets.append(interactor_a)
+                        gene_sets.append(interactor_b)
+
+                        ensembl_ids = super()._convert_entrezid2ensembl(gene_sets, section)
+                        if(len(ensembl_ids) == 2):
+                            line = ensembl_ids[0] + '\t' + ensembl_ids[1] + '\n'
+                            stage_output_file_handler.write(line)
+                            mapped_counter += 1
+                        else:
+                            line = interactor_a + '\t' + interactor_b + '\n'
+                            unmapped_counter += 1
+                            unmapped_ids.append(interactor_a)
+                            unmapped_ids.append(interactor_b)
+
+        logger.debug("\n".join(unmapped_ids))
+        logger.debug("Mapped {}  Unmapped {} " . format(mapped_counter, unmapped_counter))
+
+        stage_output_file_handler.close()
+        cls._process_interaction_out_file(stage_output_file, section, False)
+
+    @classmethod
+    def _psimitab(cls, download_file, stage_output_file, section):
+        '''Function to process intact psimitab data files
+        Input file is the psimitab file
+
+        Output file is:
+        interactorA    interactorB    pubmed
+        ENSG00000078053    ENSG00000159082    10542231
+        ENSG00000078053    ENSG00000159082    10542231
+        ENSG00000078053    ENSG00000159082    10542231
+        '''
+        abs_path_download_dir = os.path.dirname(download_file)
+        zf = zipfile.ZipFile(download_file, 'r')
+        # print(zf.namelist())
+
+        import_file_exists = False
+        # target_path = '/dunwich/scratch/prem/tmp/download/intact.txt'
+
+        if import_file_exists is not True:
+            stage_output_file_handler = open(stage_output_file, 'w')
+            header_line = 'interactorA' + '\t' + 'interactorB' + '\t' + 'pubmed' + '\n'
+
+            stage_output_file_handler.write(header_line)
+
+            if 'intact.txt' in zf.namelist():
+                # base_dir_path = args[3]
+                print('Extracting the zip file...')
+                target_path = zf.extract(member='intact.txt', path=abs_path_download_dir)
+                line_number = 0
+                with open(target_path, encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+                    for row in reader:
+                            # print(row)
+                            # check for taxid
+                            re.compile('taxid:9606')
+                            is_human_A = cls._check_tax_id(row['Taxid interactor A'], 'taxid:9606')
+                            is_human_B = cls._check_tax_id(row['Taxid interactor B'], 'taxid:9606')
+
+                            if is_human_A and is_human_B:
+                                pass
+                            else:
+                                continue
+
+                            # check for pubmed id/evidence
+                            cleaned_pubmed_id = cls._clean_id(row['Publication Identifier(s)'], 'pubmed:\d+')
+
+                            if cleaned_pubmed_id is None:
+                                cleaned_pubmed_id = ''
+                            # xref id
+                            cleaned_xref_id_A = cls._clean_id(row['Xref(s) interactor A'], 'ensembl:ENSG\d+')
+                            cleaned_xref_id_B = cls._clean_id(row['Xref(s) interactor B'], 'ensembl:ENSG\d+')
+
+                            if (cleaned_xref_id_A is not None and
+                               cleaned_xref_id_B is not None and
+                               cleaned_xref_id_A != cleaned_xref_id_B):
+                                line_number += 1
+                                line = cleaned_xref_id_A + '\t' + cleaned_xref_id_B + '\t' + cleaned_pubmed_id + '\n'
+                                stage_output_file_handler.write(line)
+
+                stage_output_file_handler.close()
+                cls._process_interaction_out_file(stage_output_file, section)
+        else:
+            cls._process_interaction_out_file(stage_output_file, section)
+
+    @classmethod
+    def _process_interaction_out_file(cls, target_path, section, include_pubmed=True):
+        '''Process the tab limited interaction output file to groups/cluster the interactors'''
+
+        dict_container = dict()
+        line_number = 0
+
+        with open(target_path) as csvfile:
+            reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+            for row in reader:
+                line_number += 1
+                sys.stdout.write('.')
+                # print(row)
+                cleaned_xref_id_A = row['interactorA']
+                cleaned_xref_id_B = row['interactorB']
+                if include_pubmed:
+                    cleaned_pubmed_id = row['pubmed']
+
+                if cleaned_xref_id_A == cleaned_xref_id_B:
+                    continue
+
+                if include_pubmed:
+                    dict_interactorA = {'interactor': cleaned_xref_id_A, 'pubmed': cleaned_pubmed_id}
+                    dict_interactorB = {'interactor': cleaned_xref_id_B, 'pubmed': cleaned_pubmed_id}
+                else:
+                    dict_interactorA = {'interactor': cleaned_xref_id_A}
+                    dict_interactorB = {'interactor': cleaned_xref_id_B}
+
+                if cleaned_xref_id_A in dict_container:
+                    current_A = dict_container[cleaned_xref_id_A]
+                    if dict_interactorB not in current_A:
+                        current_A.append(dict_interactorB)
+                        dict_container[cleaned_xref_id_A] = current_A
+                else:
+                    dict_container[cleaned_xref_id_A] = [dict_interactorB]
+
+                if cleaned_xref_id_B in dict_container:
+                    current_B = dict_container[cleaned_xref_id_B]
+                    if dict_interactorA not in current_B:
+                        current_B.append(dict_interactorA)
+                        dict_container[cleaned_xref_id_B] = current_B
+                else:
+                    dict_container[cleaned_xref_id_B] = [dict_interactorA]
+
+            cls._create_json_output_interaction(dict_container, target_path, section)
+            print('GENE INTERACTION STAGE COMPLETE')
+
+    @classmethod
+    def _create_json_output_interaction(cls, dict_container, target_file_path, section):
+        '''Stores the output from _process_interaction_out_file function into JSON file'''
+        count = 0
+        dict_keys = dict_container.keys()
+        json_target_file_path = target_file_path.replace(".out", ".json")
+
+        load_mapping = False
+        with open(json_target_file_path, mode='w', encoding='utf-8') as f:
+            f.write('{"docs":[\n')
+
+            for gene in dict_container:
+                int_object = dict()
+                # int_object["_id"] = gene
+                int_object["_parent"] = gene
+                int_object["interactors"] = dict_container[gene]
+                int_object["interaction_source"] = section['source']
+                f.write(json.dumps(int_object))
+                count += 1
+
+                if len(dict_keys) == count:
+                    f.write('\n')
+                else:
+                    f.write(',\n')
+
+            f.write('\n]}')
+        logger.debug("No. genes to load "+str(count))
+        logger.debug("Json written to " + json_target_file_path)
+        logger.debug("Load mappings")
+
+        if load_mapping:
+            status = cls._load_interaction_mappings(section)
+            logger.debug(str(status))
+
+    @classmethod
+    def _load_interaction_mappings(cls, section):
+        '''Load the mappings for interactions index type'''
+        interaction_mapping = MappingProperties("interactions", "gene")
+        interaction_mapping.add_property("interactors", "object", index="not_analyzed")
+        interaction_mapping.add_property("interaction_source", "string")
+        load = Loader()
+        idx = section['index']
+        options = {"indexName": idx, "shards": 1}
+        status = load.mapping(interaction_mapping, "interactions", **options)
+        return status
+
+    @classmethod
+    def _check_tax_id(cls, search_str, idpattern):
+        '''Utility function to checks if the Taxid column matches the given taxid string'''
+        p = re.compile(idpattern)
+        m = p.search(search_str)
+
+        if m:
+            return True
+        else:
+            return False
+
+    @classmethod
+    def _clean_id(cls, search_str, idpattern):
+        '''Utility function to split the given string and get the value alone
+        eg: pubmed:\d+ returns the pubmed id alone'''
+        p = re.compile(idpattern)
+        m = p.search(search_str)
+        matched_id = ''
+        if m:
+            matched_id = m.group()
+            split_id = matched_id.split(sep=':')
+            if split_id:
+                return split_id[1]
+        else:
+            pass
+
+        return None

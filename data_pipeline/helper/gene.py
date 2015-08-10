@@ -2,11 +2,6 @@
 
 import logging
 from builtins import classmethod
-import sys
-import csv
-import re
-import zipfile
-import os
 from elastic.search import ElasticQuery, Search
 from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
@@ -264,3 +259,16 @@ class Gene(object):
             db = dbx[0].replace('hgnc:hgnc', 'hgnc')
             arr[db] = dbx[1]
         gi['dbxrefs'] = arr
+
+    @classmethod
+    def _convert_entrezid2ensembl(cls, gene_sets, section):
+        '''Converts given set of entrez ids to ensembl ids by querying the gene index dbxrefs'''
+        query = ElasticQuery.filtered(Query.match_all(),
+                                      TermsFilter.get_terms_filter("dbxrefs.entrez", gene_sets))
+        docs = Search(query, idx=section['index'], size=1000000).search().docs
+        ensembl_ids = []
+        for doc in docs:
+            ens_id = doc._meta['_id']
+            ensembl_ids.append(ens_id)
+
+        return ensembl_ids
