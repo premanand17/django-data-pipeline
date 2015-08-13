@@ -7,7 +7,6 @@ import data_pipeline
 import shutil
 import logging
 from data_pipeline.helper.gene_interactions import GeneInteractions
-import pprint
 import json
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,8 @@ def tearDownModule():
     app_data_dir = os.path.dirname(data_pipeline.__file__)
     test_data_dir = app_data_dir + '/tests/data'
     stage_data_dir = test_data_dir + '/STAGE'
-    #if(os.path.exists(stage_data_dir)):
-    #    shutil.rmtree(stage_data_dir)
+    if(os.path.exists(stage_data_dir)):
+        shutil.rmtree(stage_data_dir)
 
 
 class GeneInteractionStagingTest(TestCase):
@@ -168,4 +167,4 @@ class GeneInteractionProcessTest(TestCase):
 
 
 class GenePathwayProcessTest(TestCase):
-    pass # ToDO
+    pass  # ToDO
