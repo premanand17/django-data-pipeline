@@ -254,14 +254,13 @@ class Gene(object):
                 logger.warn('DBXREF PARSE: '+dbxref)
                 continue
             dbx[0] = dbx[0].lower()
-#             if dbx[0] == 'ensembl':
-#                 continue
+
             db = dbx[0].replace('hgnc:hgnc', 'hgnc')
             arr[db] = dbx[1]
         gi['dbxrefs'] = arr
 
     @classmethod
-    def _convert_entrezid2ensembl(cls, gene_sets, section):
+    def _convert_entrezid2ensembl(cls, gene_sets, section, log_output_file_handler=None, log_conversion=True):
         '''Converts given set of entrez ids to ensembl ids by querying the gene index dbxrefs'''
         query = ElasticQuery.filtered(Query.match_all(),
                                       TermsFilter.get_terms_filter("dbxrefs.entrez", gene_sets))
@@ -271,4 +270,32 @@ class Gene(object):
             ens_id = doc._meta['_id']
             ensembl_ids.append(ens_id)
 
+        if log_conversion:
+            if log_output_file_handler is not None:
+                cls._log_entrezid2ensembl_coversion(gene_sets, ensembl_ids, log_output_file_handler)
+
         return ensembl_ids
+
+    @classmethod
+    def _log_entrezid2ensembl_coversion(cls, entrez_genes_in, ensembl_genes_out,  log_output_file_handler):
+        '''Logs the conversion rates between entrez2ensembl and also stores the input entrez ids for later reference'''
+        entrez_genes_count = len(entrez_genes_in)
+        ensembl_genes_count = len(ensembl_genes_out)
+        try:
+            less_more = entrez_genes_count/ensembl_genes_count
+        except ZeroDivisionError:
+            less_more = 2
+
+        if less_more > 1:
+            diff = entrez_genes_count - ensembl_genes_count
+            diff_text = "Less("+str(diff) + ")"
+        elif less_more < 1:
+            diff = ensembl_genes_count - entrez_genes_count
+            diff_text = "More("+str(diff) + ")"
+        elif less_more == 1:
+            diff = entrez_genes_count - ensembl_genes_count
+            diff_text = "Equal("+str(diff) + ")"
+
+        log_output_file_handler.write(','.join(entrez_genes_in) + "\t" +
+                                      ','.join(ensembl_genes_out) + "\t" + str(entrez_genes_count) + '/' +
+                                      str(ensembl_genes_count) + "\t" + diff_text + "\n")

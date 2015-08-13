@@ -6,6 +6,9 @@ import os
 import data_pipeline
 import shutil
 import logging
+from data_pipeline.helper.gene_interactions import GeneInteractions
+import pprint
+import json
 logger = logging.getLogger(__name__)
 
 
@@ -13,7 +16,9 @@ def tearDownModule():
     logging.debug('Module teardown...')
     app_data_dir = os.path.dirname(data_pipeline.__file__)
     test_data_dir = app_data_dir + '/tests/data'
-    shutil.rmtree(test_data_dir + '/STAGE')
+    stage_data_dir = test_data_dir + '/STAGE'
+    #if(os.path.exists(stage_data_dir)):
+    #    shutil.rmtree(stage_data_dir)
 
 
 class GeneInteractionStagingTest(TestCase):
@@ -111,13 +116,56 @@ class GenePathwayStagingTest(TestCase):
 
         self.assertTrue(os.access(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.biocarta.v5.0.entrez.gmt.json', os.R_OK))
 
+
 class GeneInteractionProcessTest(TestCase):
-    pass
+    '''Test functions in GeneInteractions class'''
+
+    def test_group_binary_interactions(self):
+        '''
+        Test if the interactors are grouped correctly
+        '''
+        binary_interactions = [(0, 1), (0, 2), (1, 2), (1, 3), (2, 3), (3, 4),
+                               (4, 5), (5, 6), (5, 7), (6, 8), (7, 8), (8, 9)]
+
+        expected_dict = {
+            '0': ['1', '2'],
+            '1': ['0', '2', '3'],
+            '2': ['0', '1', '3'],
+            '3': ['1', '2', '4'],
+            '4': ['3', '5'],
+            '5': ['4', '6', '7'],
+            '6': ['5', '8'],
+            '7': ['5', '8'],
+            '8': ['6', '7', '9'],
+            '9': ['8']
+            }
+
+        grouped_interactions = GeneInteractions._group_binary_interactions(binary_interactions)
+        self.assertDictEqual(grouped_interactions, expected_dict, "Grouping of interactions done OK")
+        self.assertTrue(10 == len(grouped_interactions), "dict contains 10 groups")
+        self.assertIn('8', expected_dict, "key 8 is in dict")
+        self.assertIn('9', grouped_interactions['8'], "value 9 is in dict['8'] ")
+        self.assertIn('1', grouped_interactions['0'], "value 1 is in dict['0'] ")
+
+    def test_interactor_json_decorator(self):
+        json_a = GeneInteractions.interactor_json_decorator("geneA")
+        self.assertDictEqual(json_a, {'interactor': 'geneA'}, "JSON equal for geneA")
+
+    def test_interaction_json_decorator(self):
+        json_interaction = GeneInteractions.interaction_json_decorator("intact", "geneA", ["geneB", "geneC", "geneD"],
+                                                                       "pubmed", ["1234", "4567", "8912"])
+
+        self.assertIn('"_parent": "geneA"', json_interaction, "_parent found in json")
+        self.assertIn('"interaction_source": "intact"', json_interaction, "_parent found in json")
+
+        json_interaction = GeneInteractions.interaction_json_decorator("bioplex", "geneA", ["geneB", "geneC", "geneD"])
+        self.assertJSONEqual(json_interaction,
+                             json.dumps({"interactors": [{"interactor": "geneB"},
+                                                         {"interactor": "geneC"},
+                                                         {"interactor": "geneD"}],
+                                         "interaction_source": "bioplex", "_parent": "geneA"}),
+                             "JSON for interaction equal")
 
 
 class GenePathwayProcessTest(TestCase):
-    pass
-
-
-
-
+    pass # ToDO

@@ -13,11 +13,9 @@ import re
 import gzip
 import logging
 from data_pipeline.helper.gene import Gene
-import zipfile
-import csv
-import sys
-from elastic.management.loaders.mapping import MappingProperties
-import datetime
+from data_pipeline.helper.gene_interactions import GeneInteractions
+from data_pipeline.helper.gene_pathways import GenePathways
+
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
@@ -122,7 +120,21 @@ class PostProcess(object):
         if 'output' in section:
             return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['output'])
         elif 'files' in section:
-            return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
+            download_files = []
+            ff = section['files'].split(',')
+            print(len(ff))
+            if len(ff) > 1:
+                print('I am in if')
+                for f in ff:
+                    print('FFFFFFF' + f)
+                    download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
+                                                 f.strip())
+                    download_files.append(download_file)
+                    print(download_files)
+                return download_files
+            else:
+                print('I am in else')
+                return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
 
     ''' Pipeline methods '''
     @classmethod
@@ -247,7 +259,14 @@ class PostProcess(object):
         stage_output_file = cls._get_stage_output_file(*args, **kwargs)
         download_file = cls._get_download_file(*args, **kwargs)
         section = kwargs['section']
-        Gene.gene_interaction_parse(download_file, stage_output_file, section)
+        GeneInteractions.gene_interaction_parse(download_file, stage_output_file, section)
+
+    @classmethod
+    def gene_pathway_parse(cls, *args, **kwargs):
+        stage_output_file = cls._get_stage_output_file(*args, **kwargs)
+        download_files = cls._get_download_file(*args, **kwargs)
+        section = kwargs['section']
+        GenePathways.gene_pathway_parse(download_files, stage_output_file, section)
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
