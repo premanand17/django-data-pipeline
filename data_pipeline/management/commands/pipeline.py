@@ -22,6 +22,9 @@ class Command(BaseCommand):
     Update gene suggester weighting:
     python criteria_suggester.py gene
 
+    Gene History:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_HISTORY --steps download load
+
     Marker:
     ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections DBSNP --steps download load
     ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections RSMERGEARCH --steps download load
