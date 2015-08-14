@@ -178,7 +178,9 @@ class GeneInteractions(Gene):
         interaction_source = section['source'].lower()
         gene_interactors_dict = dict()
         evidence_dict = dict()
-
+        evidence_id = None
+        evidence_key = "pubmed"
+        
         with open(target_path) as csvfile:
             reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
             for row in reader:
@@ -198,40 +200,25 @@ class GeneInteractions(Gene):
                 interactorB = cleaned_xref_id_B
 
                 # pass the interactors and get back the list
-                if include_evidence:
-                    (gene_interactors_list_a, gene_interactors_list_b, evidence_list_a, evidence_list_b) = cls._check_binary_interactions(gene_interactors_dict,  # @IgnorePep8
-                                                                                                                                          interactorA, # @IgnorePep8
-                                                                                                                                          interactorB, # @IgnorePep8
-                                                                                                                                          evidence_dict, # @IgnorePep8
-                                                                                                                                          evidence_id) # @IgnorePep8
-                else:
-                    (gene_interactors_list_a, gene_interactors_list_b, evidence_list_a, evidence_list_b) = cls._check_binary_interactions(gene_interactors_dict, # @IgnorePep8
-                                                                                                                                          interactorA, # @IgnorePep8
-                                                                                                                                          interactorB) # @IgnorePep8
-
+                (gene_interactors_list_a, gene_interactors_list_b) = cls._check_binary_interactions(gene_interactors_dict,  # @IgnorePep8
+                                                                                                    interactorA,
+                                                                                                    interactorB,
+                                                                                                    evidence_id)
                 gene_interactors_dict[interactorA] = gene_interactors_list_a
                 gene_interactors_dict[interactorB] = gene_interactors_list_b
 
-                if include_evidence:
-                    evidence_key = "pubmed"
-                    json_interaction_a = cls.interaction_json_decorator(interaction_source, interactorA,
-                                                                        gene_interactors_list_a,
-                                                                        evidence_key, evidence_list_a)
-                    json_interaction_b = cls.interaction_json_decorator(interaction_source,
-                                                                        interactorB,
-                                                                        gene_interactors_list_b,
-                                                                        evidence_key,
-                                                                        evidence_list_b)
-                else:
-                    json_interaction_a = cls.interaction_json_decorator(interaction_source, interactorA,
-                                                                        gene_interactors_list_a)
-                    json_interaction_b = cls.interaction_json_decorator(interaction_source, interactorB,
-                                                                        gene_interactors_list_b)
+                # json_interaction_a = cls.interaction_json_decorator(interaction_source,
+                #                                                    interactorA,
+                #                                                    gene_interactors_list_a)
+                # json_interaction_b = cls.interaction_json_decorator(interaction_source,
+                #                                                    interactorB,
+                #                                                    gene_interactors_list_b)
 
-                dict_container[interactorA] = json_interaction_a
-                dict_container[interactorB] = json_interaction_b
+                #dict_container[interactorA] = json_interaction_a
+                #dict_container[interactorB] = json_interaction_b
 
-            cls._create_json_output_interaction(dict_container, target_path, section)
+            # cls._create_json_output_interaction(dict_container, target_path, section)
+            cls._create_json_output_interaction(gene_interactors_dict, target_path, section)
             print('GENE INTERACTION STAGE COMPLETE')
 
     @classmethod
@@ -240,13 +227,52 @@ class GeneInteractions(Gene):
         count = 0
         dict_keys = dict_container.keys()
         json_target_file_path = target_file_path.replace(".out", ".json")
+        interaction_source = section['source'].lower()
 
         load_mapping = False
         with open(json_target_file_path, mode='w', encoding='utf-8') as f:
             f.write('{"docs":[\n')
 
             for gene in dict_container:
-                f.write(dict_container[gene])
+                # decorate the list
+                gene_list = dict_container[gene]
+                list2json = cls.interaction_json_decorator(interaction_source, gene, gene_list)
+                f.write(list2json)
+                count += 1
+
+                if len(dict_keys) == count:
+                    f.write('\n')
+                else:
+                    f.write(',\n')
+
+            f.write('\n]}')
+        logger.debug("No. genes to load "+str(count))
+        logger.debug("Json written to " + json_target_file_path)
+        logger.debug("Load mappings")
+
+        if load_mapping:
+            status = cls._load_interaction_mappings(section)
+            logger.debug(str(status))
+
+
+
+    @classmethod
+    def _create_json_output_interaction_ori(cls, dict_container, target_file_path, section):
+        '''Stores the output from _process_interaction_out_file function into JSON file'''
+        count = 0
+        dict_keys = dict_container.keys()
+        json_target_file_path = target_file_path.replace(".out", ".json")
+        interaction_source = section['source'].lower()
+
+        load_mapping = False
+        with open(json_target_file_path, mode='w', encoding='utf-8') as f:
+            f.write('{"docs":[\n')
+
+            for gene in dict_container:
+                # decorate the list
+                gene_list = dict_container[gene]
+                list2json = cls.interaction_json_decorator(interaction_source, gene, gene_list)
+                f.write({gene: list2json})
                 count += 1
 
                 if len(dict_keys) == count:
@@ -310,86 +336,152 @@ class GeneInteractions(Gene):
         gene_interactors_dict = dict()
 
         for i, j in binary_interactions:
-            i = str(i)
-            j = str(j)
+            interactorA = str(i)
+            interactorB = str(j)
 
-            if i == j:
+            if interactorA == interactorB:
                 continue
 
-            (gene_interactors_list_i, gene_interactors_list_j, evidence_list_a, evidence_list_b) = cls._check_binary_interactions(gene_interactors_dict,  # @IgnorePep8 @UnusedVariable
-                                                                                                                                  i, j)   # @IgnorePep8
+            (gene_interactors_list_i, gene_interactors_list_j) = cls._check_binary_interactions(gene_interactors_dict,
+                                                                                                interactorA,
+                                                                                                interactorB)
             gene_interactors_dict[i] = gene_interactors_list_i
             gene_interactors_dict[j] = gene_interactors_list_j
 
         return gene_interactors_dict
 
     @classmethod
-    def _check_binary_interactions(cls, gene_interactors, interactorA, interactorB, evidence_dict={}, evidence_id=None):
+    def _check_binary_interactions(cls, gene_interactors, interactorA, interactorB, evidence_id=None):
         '''Function to check if the interactors exists in the given dict...
         if present append to the existing list and if not add them as new list'''
-        i = str(interactorA)
-        j = str(interactorB)
+        interactorA = str(interactorA)
+        interactorB = str(interactorB)
 
-        if i == j:
-            return (gene_interactors[i], gene_interactors[j])
+        if interactorA == interactorB:
+            return (gene_interactors[interactorA], gene_interactors[interactorB])
 
-        existing_list = None
-        evidence_existing_list = None
-        if i in gene_interactors:
-            existing_list = gene_interactors[i]
+        existing_listA = None
+        if interactorA in gene_interactors:
+            existing_listA = gene_interactors[interactorA]
 
-            if j not in existing_list:
-                existing_list.append(j)
-                gene_interactors[i] = existing_list
-
-            if i in evidence_dict:
-                evidence_existing_list = evidence_dict[i]
-
-                if evidence_existing_list and evidence_id is not None:
-                    evidence_existing_list.append(evidence_id)
-                    evidence_dict[i] = evidence_existing_list
+            if interactorB not in existing_listA:
+                interactorB_evidence = {interactorB: evidence_id}
+                existing_listA.append(interactorB_evidence)
+                gene_interactors[interactorA] = existing_listA
         else:
-            gene_interactors[i] = [j]
-            if evidence_id is not None:
-                evidence_dict[i] = [evidence_id]
+            gene_interactors[interactorA] = [{interactorB: evidence_id}]
 
-        existing_list = None
-        evidence_existing_list = None
-        if j in gene_interactors:
-            existing_list = gene_interactors[j]
+        existing_listB = None
+        if interactorB in gene_interactors:
+            existing_listB = gene_interactors[interactorB]
 
-            if i not in existing_list:
-                existing_list.append(i)
-                gene_interactors[j] = existing_list
+            if interactorA not in existing_listB:
+                interactorA_evidence = {interactorA: evidence_id}
+                existing_listB.append(interactorA_evidence)
+                gene_interactors[interactorB] = existing_listB
 
-            if j in evidence_dict:
-                evidence_existing_list = evidence_dict[j]
-
-                if evidence_existing_list and evidence_id is not None:
-                    evidence_existing_list.append(evidence_id)
-                    evidence_dict[j] = evidence_existing_list
         else:
-            gene_interactors[j] = [i]
-            if evidence_id is not None:
-                evidence_dict[j] = [evidence_id]
+            gene_interactors[interactorB] = [{interactorA: evidence_id}]
 
-        if evidence_dict and len(evidence_dict) > 0:
-            return (gene_interactors[i], gene_interactors[j], evidence_dict[i], evidence_dict[j])
-        else:
-            return (gene_interactors[i], gene_interactors[j], [], [])
+        return (gene_interactors[interactorA], gene_interactors[interactorB])
+
+#     @classmethod
+#     def _check_binary_interactions_ori(cls, gene_interactors, interactorA, interactorB, evidence_dict={}, evidence_id=None):
+#         '''Function to check if the interactors exists in the given dict...
+#         if present append to the existing list and if not add them as new list'''
+#         i = str(interactorA)
+#         j = str(interactorB)
+# 
+#         if i == j:
+#             return (gene_interactors[i], gene_interactors[j])
+# 
+#         existing_list = None
+#         evidence_existing_list = None
+#         if i in gene_interactors:
+#             existing_list = gene_interactors[i]
+# 
+#             if j not in existing_list:
+#                 existing_list.append(j)
+#                 gene_interactors[i] = existing_list
+# 
+#             if i in evidence_dict:
+#                 evidence_existing_list = evidence_dict[i]
+# 
+#                 if evidence_existing_list and evidence_id is not None:
+#                     evidence_existing_list.append(evidence_id)
+#                     evidence_dict[i] = evidence_existing_list
+#         else:
+#             gene_interactors[i] = [j]
+#             if evidence_id is not None:
+#                 evidence_dict[i] = [evidence_id]
+# 
+#         existing_list = None
+#         evidence_existing_list = None
+#         if j in gene_interactors:
+#             existing_list = gene_interactors[j]
+# 
+#             if i not in existing_list:
+#                 existing_list.append(i)
+#                 gene_interactors[j] = existing_list
+# 
+#             if j in evidence_dict:
+#                 evidence_existing_list = evidence_dict[j]
+# 
+#                 if evidence_existing_list and evidence_id is not None:
+#                     evidence_existing_list.append(evidence_id)
+#                     evidence_dict[j] = evidence_existing_list
+#         else:
+#             gene_interactors[j] = [i]
+#             if evidence_id is not None:
+#                 evidence_dict[j] = [evidence_id]
+# 
+#         if evidence_dict and len(evidence_dict) > 0:
+#             return (gene_interactors[i], gene_interactors[j], evidence_dict[i], evidence_dict[j])
+#         else:
+#             return (gene_interactors[i], gene_interactors[j], [], [])
 
     @classmethod
-    def interactor_json_decorator(cls, gene_interactor, evidence_key=None, evidence_value=None):
+    def interactor_json_decorator(cls, gene_interactor, evidence_key="pubmed"):
 
-        if evidence_key:
-            json_str = {"interactor": gene_interactor, evidence_key: evidence_value}
+        interactor, evidence_value = list(gene_interactor.items())[0]
+
+        if evidence_value is not None:
+            evidence_value = str(evidence_value)
+            json_str = {"interactor": interactor, evidence_key: evidence_value}
         else:
-            json_str = {"interactor": gene_interactor}
+            interactor = str(interactor)
+            json_str = {"interactor": interactor}
 
         return json_str
 
     @classmethod
-    def interaction_json_decorator(cls, interaction_source, parent, gene_list, evidence_key=None, evidence_list=None):  # @IgnorePep8
+    def interaction_json_decorator(cls, interaction_source, parent, gene_list):
+        '''
+         {"interaction_source": "bioplex", "interactors": [{"interactor": "ENSG00000143416"},
+                                                  {"interactor": "ENSG00000102043"},
+                                                  {"interactor": "ENSG00000079387"},
+                                                  {"interactor": "ENSG00000187231"}],
+                                                  "_parent": "ENSG00000152213"}
+        {"interaction_source": "bioplex", "interactors": [{"interactor": "ENSG00000143416", "pubmed":"1234"},
+                                                  {"interactor": "ENSG00000102043", "pubmed":"1234"},
+                                                  {"interactor": "ENSG00000079387", "pubmed":"3456"},
+                                                  {"interactor": "ENSG00000187231", "pubmed":"1234"}],
+                                                  "_parent": "ENSG00000152213"}
+        '''
+        interactors = []
+        parent = str(parent)
+        for interactor in gene_list:
+            interator_json = cls.interactor_json_decorator(interactor)
+            interactors.append(interator_json)
+
+        interaction_json_str = json.dumps({"interaction_source": interaction_source, "_parent": parent,
+                                           "interactors": interactors}, sort_keys=True)
+
+        return interaction_json_str
+
+
+    @classmethod
+    def interaction_json_decorator_ori(cls, interaction_source, parent, gene_list, evidence_key=None, evidence_list=None):  # @IgnorePep8
         '''
          {"interaction_source": "bioplex", "interactors": [{"interactor": "ENSG00000143416"},
                                                   {"interactor": "ENSG00000102043"},
