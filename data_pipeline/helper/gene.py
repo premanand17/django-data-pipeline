@@ -51,7 +51,7 @@ class Gene(object):
         load.mapping(props, 'gene', analyzer=Loader.KEYWORD_ANALYZER, **options)
 
     @classmethod
-    def gene_history_mapping(cls, idx, idx_type):
+    def gene_history_mapping(cls, idx, idx_type, test_mode=False):
         ''' Load the mapping for the gene index. '''
         props = MappingProperties(idx_type)
         props.add_property("geneid", "integer") \
@@ -62,7 +62,9 @@ class Gene(object):
         ''' create index and add mapping '''
         load = Loader()
         options = {"indexName": idx, "shards": 5}
-        load.mapping(props, idx_type, analyzer=Loader.KEYWORD_ANALYZER, **options)
+        if not test_mode:
+            load.mapping(props, idx_type, analyzer=Loader.KEYWORD_ANALYZER, **options)
+        return props
 
     @classmethod
     def ensembl_gene_parse(cls, ensembl_gene_parse):
