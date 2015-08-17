@@ -173,6 +173,14 @@ class PostProcess(object):
         with gzip.open(download_file, 'rt') as gene_pub_f:
             Gene.gene_pub_parse(gene_pub_f, kwargs['section']['index'])
 
+    @classmethod
+    def gene_history_parse(cls, *args, **kwargs):
+        ''' Parse gene_history file from NCBI. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        Gene.gene_history_mapping(kwargs['section']['index'], kwargs['section']['index_type'])
+        with gzip.open(download_file, 'rt') as gene_his_f:
+            Gene.gene_history_parse(gene_his_f, kwargs['section']['index'], kwargs['section']['index_type'])
+
     ''' Marker downloads '''
     @classmethod
     def dbsnp_marker(cls, *args, **kwargs):
