@@ -8,6 +8,7 @@ import shutil
 import logging
 from data_pipeline.helper.gene_interactions import GeneInteractions
 import json
+import re
 logger = logging.getLogger(__name__)
 
 
@@ -59,6 +60,44 @@ class GeneInteractionStagingTest(TestCase):
         self.assertIn("docs", docs_line, "docs line OK")
         self.assertIn("interaction_source", interactor_line, "contains interaction_source")
         self.assertIn("intact", interactor_line, "contains intact as interaction_source")
+
+    def test_intact_staged_output_files(self):
+
+        # preinitialize dict
+        expected_interactors = [
+            {"interactor": "ENSG00000115641", "pubmed": "11001931"},
+            {"interactor": "ENSG00000136068", "pubmed": "9437013"},
+            {"interactor": "ENSG00000196924", "pubmed": "9437013"},
+            {"interactor": "ENSG00000171552", "pubmed": "10446169"},
+            {"interactor": "ENSG00000075142", "pubmed": "10748169"},
+            {"interactor": "ENSG00000135018", "pubmed": "11076969"},
+            {"interactor": "ENSG00000185043", "pubmed": "10366599"}
+            ]
+
+        expected_interactors2 = {'ENSG00000171552': '9437013', 'ENSG00000196924': '11001931'}
+        expected_interactors3 = {'ENSG00000196924': '11001931', 'ENSG00000171552': '9437013'}
+        self.assertDictEqual(expected_interactors2, expected_interactors3, "dict with interactor order changed equal")
+
+        parent = r'"_parent": "ENSG00000143801"'
+        matched_json_str = None
+        with open(self.test_data_dir + '/STAGE/INTACT/intact.zip.json', 'r') as f:
+            for line in f:
+                if re.search(parent, line):
+                    matched_json_str = line.rstrip()
+                    matched_json_str = matched_json_str[:-1]
+                    break
+
+        json_data = json.loads(matched_json_str)
+        parent = json_data["_parent"]
+        stage_interactors = json_data["interactors"]
+        interaction_source = json_data["interaction_source"]
+
+        self.assertEqual(parent, "ENSG00000143801", "Parent is ENSG00000143801")
+        self.assertEqual(interaction_source, "intact", "Source is intact")
+
+        expected_dict = dict((i['interactor'], i['pubmed']) for i in expected_interactors)
+        staged_dict = dict((i['interactor'], i['pubmed']) for i in stage_interactors)
+        self.assertDictEqual(expected_dict, staged_dict, "Staging OK")
 
     def test_bioplex(self):
         ''' Test bioplex staging. '''
@@ -119,45 +158,100 @@ class GenePathwayStagingTest(TestCase):
 class GeneInteractionProcessTest(TestCase):
     '''Test functions in GeneInteractions class'''
 
+    def test_check_binary_interactions(self):
+
+        gene_interactors = {
+            'gene0': [{'gene1:evidence1'}, {'gene2:evidence2'}],
+            'gene1': [{'gene0:evidence0'}, {'gene2:evidence2'}, {'gene3:evidence3'}]
+            }
+
+        interactorA = "gene0"
+        interactorB = "gene4"
+        (gene_interactors_list_a, gene_interactors_list_b) = GeneInteractions._check_binary_interactions(gene_interactors,  # @IgnorePep8
+                                                                                                         interactorA,
+                                                                                                         interactorB,
+                                                                                                         evidence_id="evidence4") # @IgnorePep8
+
+        gene_interactors[interactorA] = gene_interactors_list_a
+        gene_interactors[interactorB] = gene_interactors_list_b
+
+        processed_interactors1 = {'gene0': [{'gene1:evidence1'}, {'gene2:evidence2'}, {'gene4': 'evidence4'}],
+                                  'gene1': [{'gene0:evidence0'}, {'gene2:evidence2'}, {'gene3:evidence3'}],
+                                  'gene4': [{'gene0': 'evidence4'}],
+                                  }
+
+        self.assertDictEqual(gene_interactors, processed_interactors1, "Grouping OK first iteration")
+
+        interactorA = "gene4"
+        interactorB = "gene5"
+        (gene_interactors_list_a, gene_interactors_list_b) = GeneInteractions._check_binary_interactions(gene_interactors, # @IgnorePep8
+                                                                                                         interactorA,
+                                                                                                         interactorB,
+                                                                                                         evidence_id="evidence5") # @IgnorePep8
+
+        gene_interactors[interactorA] = gene_interactors_list_a
+        gene_interactors[interactorB] = gene_interactors_list_b
+
+        processed_interactors2 = {'gene0': [{'gene1:evidence1'}, {'gene2:evidence2'}, {'gene4': 'evidence4'}],
+                                  'gene1': [{'gene0:evidence0'}, {'gene2:evidence2'}, {'gene3:evidence3'}],
+                                  'gene4': [{'gene0': 'evidence4'}, {'gene5': 'evidence5'}],
+                                  'gene5': [{'gene4': 'evidence5'}],
+                                  }
+
+        self.assertDictEqual(gene_interactors, processed_interactors2, "Grouping OK second iteration")
+
     def test_group_binary_interactions(self):
         '''
         Test if the interactors are grouped correctly
         '''
-        binary_interactions = [(0, 1), (0, 2), (1, 2), (1, 3), (2, 3), (3, 4),
-                               (4, 5), (5, 6), (5, 7), (6, 8), (7, 8), (8, 9)]
+        binary_interactions = [('0', '1'), ('0', '2'), ('1', '2'), ('1', '3'), ('2', '3'), ('3', '4'),
+                               ('4', '5'), ('5', '6'), ('5', '7'), ('6', '8'), ('7', '8'), ('8', '9')]
 
         expected_dict = {
-            '0': ['1', '2'],
-            '1': ['0', '2', '3'],
-            '2': ['0', '1', '3'],
-            '3': ['1', '2', '4'],
-            '4': ['3', '5'],
-            '5': ['4', '6', '7'],
-            '6': ['5', '8'],
-            '7': ['5', '8'],
-            '8': ['6', '7', '9'],
-            '9': ['8']
+            '0': [{'1': None}, {'2': None}],
+            '1': [{'0': None}, {'2': None}, {'3': None}],
+            '2': [{'0': None}, {'1': None}, {'3': None}],
+            '3': [{'1': None}, {'2': None}, {'4': None}],
+            '4': [{'3': None}, {'5': None}],
+            '5': [{'4': None}, {'6': None}, {'7': None}],
+            '6': [{'5': None}, {'8': None}],
+            '7': [{'5': None}, {'8': None}],
+            '8': [{'6': None}, {'7': None}, {'9': None}],
+            '9': [{'8': None}]
             }
 
         grouped_interactions = GeneInteractions._group_binary_interactions(binary_interactions)
+
         self.assertDictEqual(grouped_interactions, expected_dict, "Grouping of interactions done OK")
         self.assertTrue(10 == len(grouped_interactions), "dict contains 10 groups")
         self.assertIn('8', expected_dict, "key 8 is in dict")
-        self.assertIn('9', grouped_interactions['8'], "value 9 is in dict['8'] ")
-        self.assertIn('1', grouped_interactions['0'], "value 1 is in dict['0'] ")
+        self.assertIn({'9': None}, grouped_interactions['8'], "value 9 is in dict['8'] ")
+        self.assertIn({'1': None}, grouped_interactions['0'], "value 1 is in dict['0'] ")
 
     def test_interactor_json_decorator(self):
-        json_a = GeneInteractions.interactor_json_decorator("geneA")
+        json_a = GeneInteractions.interactor_json_decorator({"geneA": None})
         self.assertDictEqual(json_a, {'interactor': 'geneA'}, "JSON equal for geneA")
 
+        json_b = GeneInteractions.interactor_json_decorator({"geneA": "evidenceA"})
+        self.assertDictEqual(json_b, {'interactor': 'geneA', 'pubmed': 'evidenceA'},
+                             "JSON equal for geneA with evidence")
+
     def test_interaction_json_decorator(self):
-        json_interaction = GeneInteractions.interaction_json_decorator("intact", "geneA", ["geneB", "geneC", "geneD"],
-                                                                       "pubmed", ["1234", "4567", "8912"])
+
+        json_interaction = GeneInteractions.interaction_json_decorator("intact",
+                                                                       "geneA",
+                                                                       [{"geneB": "1234"},
+                                                                        {"geneC": "2345"},
+                                                                        {"geneD": "6789"}])
 
         self.assertIn('"_parent": "geneA"', json_interaction, "_parent found in json")
         self.assertIn('"interaction_source": "intact"', json_interaction, "_parent found in json")
 
-        json_interaction = GeneInteractions.interaction_json_decorator("bioplex", "geneA", ["geneB", "geneC", "geneD"])
+        json_interaction = GeneInteractions.interaction_json_decorator("bioplex",
+                                                                       "geneA",
+                                                                       [{"geneB": None},
+                                                                        {"geneC": None},
+                                                                        {"geneD": None}])
         self.assertJSONEqual(json_interaction,
                              json.dumps({"interactors": [{"interactor": "geneB"},
                                                          {"interactor": "geneC"},
