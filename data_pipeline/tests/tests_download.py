@@ -13,14 +13,14 @@ class DownloadTest(TestCase):
     def test_ini_file(self):
         ''' Test ini file downloads. '''
         out = StringIO()
-        ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
         call_command('pipeline', '--steps', 'download', sections='ENSEMBL_GENE', dir='/tmp', ini=ini_file, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
 
     def test_pub_ini_file(self):
         ''' Test publication ini file downloads. '''
         out = StringIO()
-        ini_file = os.path.join(os.path.dirname(__file__), 'publication.ini')
+        ini_file = os.path.join(os.path.dirname(__file__), 'test_publication.ini')
         call_command('publications', '--dir', '/tmp', '--steps', 'download', 'load', ini=ini_file, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
         requests.delete(ElasticSettings.url() + '/' + 'test__publications')

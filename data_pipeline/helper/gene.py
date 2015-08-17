@@ -51,6 +51,22 @@ class Gene(object):
         load.mapping(props, 'gene', analyzer=Loader.KEYWORD_ANALYZER, **options)
 
     @classmethod
+    def gene_history_mapping(cls, idx, idx_type, test_mode=False):
+        ''' Load the mapping for the gene index. '''
+        props = MappingProperties(idx_type)
+        props.add_property("geneid", "integer") \
+             .add_property("discontinued_geneid", "integer") \
+             .add_property("discontinued_symbol", "string", analyzer="full_name") \
+             .add_property("discontinue_date", "date")
+
+        ''' create index and add mapping '''
+        load = Loader()
+        options = {"indexName": idx, "shards": 5}
+        if not test_mode:
+            load.mapping(props, idx_type, analyzer=Loader.KEYWORD_ANALYZER, **options)
+        return props
+
+    @classmethod
     def ensembl_gene_parse(cls, ensembl_gene_parse):
         ''' Parse gene GTF file from ensembl to create gene index. '''
         gene_list = {}
@@ -223,6 +239,34 @@ class Gene(object):
             else:
                 genes[parts[1]] = {"pmids": [pmid]}
         cls._update_gene(genes, idx)
+
+    @classmethod
+    def gene_history_parse(cls, gene_his, idx, idx_type):
+        ''' Parse gene_history file from NCBI and load. '''
+        json_data = ''
+        line_num = 0
+        for gene_his in gene_his:
+            if gene_his.startswith('9606\t'):
+                parts = gene_his.strip().split('\t')
+
+                row_obj = {"index": {"_index": idx, "_type": idx_type}}
+                if parts[1] != "-":
+                    row = {"geneid": int(parts[1]), "discontinued_geneid": int(parts[2]),
+                           "discontinued_symbol": parts[3], "discontinue_date": parts[4]}
+                else:
+                    row = {"discontinued_geneid": int(parts[2]),
+                           "discontinued_symbol": parts[3], "discontinue_date": parts[4]}
+                json_data += json.dumps(row_obj) + '\n'
+                json_data += json.dumps(row) + '\n'
+                line_num += 1
+
+                if(line_num > 5000):
+                    line_num = 0
+                    print('.', end="", flush=True)
+                    Loader().bulk_load(idx, idx_type, json_data)
+                    json_data = ''
+        if line_num > 0:
+            Loader().bulk_load(idx, idx_type, json_data)
 
     @classmethod
     def _update_gene(cls, genes, idx):
