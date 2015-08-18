@@ -34,6 +34,7 @@ def tearDownModule():
     INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
     requests.delete(ElasticSettings.url() + '/' + INI_CONFIG['GENE_HISTORY']['index'])
     os.remove(MY_INI_FILE)
+    shutil.rmtree(os.path.join(TEST_DATA_DIR, 'DOWNLOAD', 'ENSMART_GENE'))
 
 
 class StageTest(TestCase):
@@ -77,6 +78,35 @@ class LoadTest(TestCase):
         docs = elastic.search().docs
         self.assertEqual(len(docs), 1)
         self.assertTrue('entrez' in getattr(docs[0], "dbxrefs"))
+        self.assertEqual(getattr(docs[0], "dbxrefs")['entrez'], '26191')
+
+        ''' 3. Add uniprot and fill in missing entrez fields. '''
+        call_command('pipeline', '--steps', 'download', 'load', sections='ENSMART_GENE',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        query = ElasticQuery.query_string("DNMT3L", fields=["symbol"])
+        elastic = Search(query, idx=idx)
+        docs = elastic.search().docs
+        self.assertTrue('entrez' in getattr(docs[0], "dbxrefs"))
+        self.assertTrue('swissprot' in getattr(docs[0], "dbxrefs"))
+
+        ''' 4. Add gene synonyms and dbxrefs. '''
+        call_command('pipeline', '--steps', 'load', sections='GENE_INFO',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        query = ElasticQuery.query_string("PTPN22", fields=["symbol"])
+        elastic = Search(query, idx=idx)
+        docs = elastic.search().docs
+        self.assertTrue('PTPN8' in getattr(docs[0], "synonyms"))
+
+        ''' 5. Add PMIDs to gene docs. '''
+        call_command('pipeline', '--steps', 'load', sections='GENE_PUBS',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        query = ElasticQuery.query_string("PTPN22", fields=["symbol"])
+        elastic = Search(query, idx=idx)
+        docs = elastic.search().docs
+        self.assertGreater(len(getattr(docs[0], "pmids")), 0)
 
     def test_gene_history_loader(self):
         ''' Test the gene history loading. '''

@@ -16,6 +16,8 @@ setup(
                                     'tests/data/DOWNLOAD/GENE_HISTORY/*gz',
                                     'tests/data/DOWNLOAD/ENSEMBL_GENE_GTF/*gz',
                                     'tests/data/DOWNLOAD/GENE2ENSEMBL/*gz',
+                                    'tests/data/DOWNLOAD/GENE_INFO/*gz',
+                                    'tests/data/DOWNLOAD/GENE_PUBS/*gz',
                                     'tests/*.ini'], },
     include_package_data=True,
     zip_safe=False,
