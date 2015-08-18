@@ -6,6 +6,30 @@ from django.utils.six import StringIO
 from elastic.elastic_settings import ElasticSettings
 import os
 import requests
+from data_pipeline.utils import IniParser
+
+IDX_SUFFIX = ElasticSettings.getattr('TEST')
+MY_PUB_INI_FILE = os.path.join(os.path.dirname(__file__), IDX_SUFFIX + '_test_publication.ini')
+
+
+def setUpModule():
+    ''' Change ini config (MY_PUB_INI_FILE) to use the test suffix when
+    creating publication pipeline index. '''
+    ini_file = os.path.join(os.path.dirname(__file__), 'test_publication.ini')
+    if os.path.isfile(MY_PUB_INI_FILE):
+        return
+
+    with open(MY_PUB_INI_FILE, 'w') as new_file:
+        with open(ini_file) as old_file:
+            for line in old_file:
+                new_file.write(line.replace('auto_tests', IDX_SUFFIX))
+
+
+def tearDownModule():
+    # remove index created
+    INI_CONFIG = IniParser().read_ini(MY_PUB_INI_FILE)
+    requests.delete(ElasticSettings.url() + '/' + INI_CONFIG['DISEASE']['index'])
+    os.remove(MY_PUB_INI_FILE)
 
 
 class DownloadTest(TestCase):
@@ -20,10 +44,8 @@ class DownloadTest(TestCase):
     def test_pub_ini_file(self):
         ''' Test publication ini file downloads. '''
         out = StringIO()
-        ini_file = os.path.join(os.path.dirname(__file__), 'test_publication.ini')
-        call_command('publications', '--dir', '/tmp', '--steps', 'download', 'load', ini=ini_file, stdout=out)
+        call_command('publications', '--dir', '/tmp', '--steps', 'download', 'load', ini=MY_PUB_INI_FILE, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
-        requests.delete(ElasticSettings.url() + '/' + 'test__publications')
 
     def test_file_cmd(self):
         out = StringIO()
