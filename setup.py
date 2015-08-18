@@ -18,6 +18,8 @@ setup(
                                     'tests/data/DOWNLOAD/GENE2ENSEMBL/*gz',
                                     'tests/data/DOWNLOAD/GENE_INFO/*gz',
                                     'tests/data/DOWNLOAD/GENE_PUBS/*gz',
+                                    'tests/data/DOWNLOAD/DBSNP/*gz',
+                                    'tests/data/DOWNLOAD/RSMERGEARCH/*gz',
                                     'tests/*.ini'], },
     include_package_data=True,
     zip_safe=False,
