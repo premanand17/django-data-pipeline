@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE eSearchResult PUBLIC "-//NLM//DTD esearch 20060628//EN" "http://eutils.ncbi.nlm.nih.gov/eutils/dtd/20060628/esearch.dtd">
+<eSearchResult><Count>8</Count><RetMax>8</RetMax><RetStart>0</RetStart><IdList>
+<Id>23369186</Id>
+<Id>24947582</Id>
+<Id>25905233</Id>
+<Id>10250814</Id>
+<Id>10252500</Id>
+<Id>24850604</Id>
+<Id>24802482</Id>
+<Id>25170024</Id>
+<Id>22787611</Id>
+</IdList><TranslationSet/><TranslationStack>   <TermSet>    <Term></Term>    <Field>Mesh</Field>    <Count></Count>    <Explode>Y</Explode>   </TermSet>   <OP>GROUP</OP>  </TranslationStack><QueryTranslation></QueryTranslation></eSearchResult>

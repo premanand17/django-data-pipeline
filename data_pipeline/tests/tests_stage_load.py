@@ -29,12 +29,16 @@ def setUpModule():
 
 
 def tearDownModule():
-    shutil.rmtree(TEST_DATA_DIR + '/STAGE')
+    if os.path.exists(TEST_DATA_DIR + '/STAGE'):
+        shutil.rmtree(TEST_DATA_DIR + '/STAGE')
     # remove index created
     INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
     requests.delete(ElasticSettings.url() + '/' + INI_CONFIG['GENE_HISTORY']['index'])
+    requests.delete(ElasticSettings.url() + '/' + INI_CONFIG['DBSNP']['index'])
     os.remove(MY_INI_FILE)
-    shutil.rmtree(os.path.join(TEST_DATA_DIR, 'DOWNLOAD', 'ENSMART_GENE'))
+    ens_dir = os.path.join(TEST_DATA_DIR, 'DOWNLOAD', 'ENSMART_GENE')
+    if os.path.exists(ens_dir):
+        shutil.rmtree(ens_dir)
 
 
 class StageTest(TestCase):
@@ -107,6 +111,26 @@ class LoadTest(TestCase):
         elastic = Search(query, idx=idx)
         docs = elastic.search().docs
         self.assertGreater(len(getattr(docs[0], "pmids")), 0)
+
+    def test_marker_pipeline(self):
+        ''' Test marker pipeline. '''
+        call_command('pipeline', '--steps', 'load', sections='DBSNP',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+
+        INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
+        idx = INI_CONFIG['DBSNP']['index']
+        idx_type = INI_CONFIG['DBSNP']['index_type']
+        elastic = Search(idx=idx, idx_type=idx_type)
+        Search.index_refresh(idx)
+        self.assertGreater(elastic.get_count()['count'], 0)
+
+        call_command('pipeline', '--steps', 'load', sections='RSMERGEARCH',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        idx = INI_CONFIG['RSMERGEARCH']['index']
+        idx_type = INI_CONFIG['RSMERGEARCH']['index_type']
+        elastic = Search(idx=idx, idx_type=idx_type)
+        Search.index_refresh(idx)
+        self.assertGreater(elastic.get_count()['count'], 0)
 
     def test_gene_history_loader(self):
         ''' Test the gene history loading. '''
