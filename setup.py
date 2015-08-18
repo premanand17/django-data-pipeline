@@ -20,7 +20,7 @@ setup(
                                     'tests/data/DOWNLOAD/GENE_PUBS/*gz',
                                     'tests/data/DOWNLOAD/DBSNP/*gz',
                                     'tests/data/DOWNLOAD/RSMERGEARCH/*gz',
-                                    'tests/data/DOWNLOAD/DISEASE/*gz',
+                                    'tests/data/DOWNLOAD/DISEASE/*txt',
                                     'tests/*.ini'], },
     include_package_data=True,
     zip_safe=False,
