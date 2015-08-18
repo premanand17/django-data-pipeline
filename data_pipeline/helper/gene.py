@@ -28,15 +28,15 @@ class Gene(object):
     '''
 
     @classmethod
-    def gene_mapping(cls, idx, idx_type):
+    def gene_mapping(cls, idx, idx_type, test_mode=False):
         ''' Load the mapping for the gene index. '''
         props = MappingProperties(idx_type)
         props.add_property("symbol", "string", analyzer="full_name") \
              .add_property("synonyms", "string", analyzer="full_name") \
              .add_property("chromosome", "string") \
              .add_property("source", "string") \
-             .add_property("start", "integer") \
-             .add_property("end", "integer") \
+             .add_property("start", "long") \
+             .add_property("stop", "long") \
              .add_property("strand", "string") \
              .add_property("description", "string") \
              .add_property("biotype", "string") \
@@ -48,7 +48,9 @@ class Gene(object):
         ''' create index and add mapping '''
         load = Loader()
         options = {"indexName": idx, "shards": 5}
-        load.mapping(props, 'gene', analyzer=Loader.KEYWORD_ANALYZER, **options)
+        if not test_mode:
+            load.mapping(props, 'gene', analyzer=Loader.KEYWORD_ANALYZER, **options)
+        return props
 
     @classmethod
     def gene_history_mapping(cls, idx, idx_type, test_mode=False):
