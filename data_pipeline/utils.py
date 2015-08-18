@@ -122,18 +122,14 @@ class PostProcess(object):
         elif 'files' in section:
             download_files = []
             ff = section['files'].split(',')
-            print(len(ff))
             if len(ff) > 1:
-                print('I am in if')
                 for f in ff:
-                    print('FFFFFFF' + f)
                     download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
                                                  f.strip())
                     download_files.append(download_file)
                     print(download_files)
                 return download_files
             else:
-                print('I am in else')
                 return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
 
     ''' Pipeline methods '''

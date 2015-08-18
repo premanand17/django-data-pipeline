@@ -27,20 +27,27 @@ class GenePathways(Gene):
         '''Function to delegate parsing of pathway files based on the source eg: kegg, reactome, go'''
         abs_path_staging_dir = os.path.dirname(stage_output_file)
         source = None
-        is_public = True
+        is_public = True if section['is_public'] == 1 else False
         for file in download_files:
             stage_output_file = abs_path_staging_dir + '/' + os.path.basename(file) + '.json'
-            if 'kegg' in file:
-                source = 'kegg'
-            elif 'reactome' in file:
-                source = 'reactome'
-            elif 'biocarta' in file:
-                source = 'biocarta'
-            elif 'all' in file:
-                source = 'GO'
-            else:
-                source = 'unknown'
+            source = cls._get_pathway_source(file)
             cls._process_pathway(file, stage_output_file, section, source, is_public)
+
+    @classmethod
+    def _get_pathway_source(cls, file):
+        '''Function to check for the pathway source in file name eg: kegg, reactome, go'''
+        if 'kegg' in file:
+            source = 'kegg'
+        elif 'reactome' in file:
+            source = 'reactome'
+        elif 'biocarta' in file:
+            source = 'biocarta'
+        elif 'all' in file:
+            source = 'GO'
+        else:
+            source = 'unknown'
+
+        return(source)
 
     @classmethod
     def _process_pathway(cls, download_file, stage_output_file, section, source, is_public):
@@ -61,12 +68,12 @@ class GenePathways(Gene):
         convert2ensembl = True
 
         json_target_file_path = stage_output_file.replace(".out", ".json")
-        log_target_file_path = json_target_file_path + ".log"
 
         json_target_file = open(json_target_file_path, mode='w', encoding='utf-8')
         json_target_file.write('{"docs":[\n')
 
-        log_target_file = open(log_target_file_path, mode='w', encoding='utf-8')
+        log_target_file = stage_output_file + ".log"
+        log_target_file_handler = open(log_target_file, mode='w', encoding='utf-8')
 
         count = 0
         tmp_row_count_file = open(download_file, encoding='utf-8')
@@ -82,29 +89,12 @@ class GenePathways(Gene):
                         pathway_name = row[0]
                         pathway_url = row[1]
                         gene_sets = row[2:]
-                        gene_sets_count = len(gene_sets)
 
                         converted_genesets = 0
                         if convert2ensembl:
-                            converted_genesets = super()._convert_entrezid2ensembl(gene_sets, section)
-                            converted_genesets_count = len(converted_genesets)
+                            converted_genesets = super()._convert_entrezid2ensembl(gene_sets, section,
+                                                                                   log_target_file_handler, True)
                             gene_sets = converted_genesets
-
-                        less_more = gene_sets_count/converted_genesets_count
-                        if less_more > 1:
-                            diff = gene_sets_count - converted_genesets_count
-                            diff_text = "Less("+str(diff) + ")"
-                        elif less_more < 1:
-                            diff = converted_genesets_count - gene_sets_count
-                            diff_text = "More("+str(diff) + ")"
-                        else:
-                            diff = converted_genesets_count - gene_sets_count
-                            diff_text = "Equal("+str(diff) + ")"
-
-                        logger.debug(pathway_name + "\t" + str(gene_sets_count) + '/' + str(converted_genesets_count)
-                                     + "\t" + diff_text + "\n")
-                        log_target_file.write(pathway_name + "\t" + str(gene_sets_count) + '/' +
-                                              str(converted_genesets_count) + "\t" + diff_text + "\n")
 
                         path_object["pathway_name"] = pathway_name
                         path_object["pathway_url"] = pathway_url

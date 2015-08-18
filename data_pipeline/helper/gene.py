@@ -262,8 +262,15 @@ class Gene(object):
     @classmethod
     def _convert_entrezid2ensembl(cls, gene_sets, section, log_output_file_handler=None, log_conversion=True):
         '''Converts given set of entrez ids to ensembl ids by querying the gene index dbxrefs'''
+
+        # first check in gene_history
+        (newgene_ids, discontinued_ids) = cls._check_gene_history(gene_sets, section)
+
+        # replace all old ids with new ids
+        replaced_gene_sets = cls._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
+
         query = ElasticQuery.filtered(Query.match_all(),
-                                      TermsFilter.get_terms_filter("dbxrefs.entrez", gene_sets))
+                                      TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets))
         docs = Search(query, idx=section['index'], size=1000000).search().docs
         ensembl_ids = []
         for doc in docs:
@@ -272,9 +279,40 @@ class Gene(object):
 
         if log_conversion:
             if log_output_file_handler is not None:
-                cls._log_entrezid2ensembl_coversion(gene_sets, ensembl_ids, log_output_file_handler)
+                cls._log_entrezid2ensembl_coversion(replaced_gene_sets, ensembl_ids, log_output_file_handler)
 
         return ensembl_ids
+
+    @classmethod
+    def _check_gene_history(cls, gene_sets, section):
+        query = ElasticQuery.filtered(Query.match_all(),
+                                      TermsFilter.get_terms_filter("discontinued_geneid", gene_sets))
+        docs = Search(query, idx=section['index'], idx_type=section['index_type_history'], size=1000000).search().docs
+
+        newgene_ids = {}
+        discountinued_geneids = []
+        for doc in docs:
+            geneid = getattr(doc, 'geneid')
+            discontinued_geneid = getattr(doc, 'discontinued_geneid')
+
+            if geneid is None:
+                discountinued_geneids.append(str(discontinued_geneid))
+            else:
+                newgene_ids[str(discontinued_geneid)] = str(geneid)
+
+        return (newgene_ids, discountinued_geneids)
+
+    @classmethod
+    def _replace_oldids_with_newids(cls, gene_sets, new_gene_sets, discontinued_ids=None):
+        replaced_genesets = [new_gene_sets[gene_id] if gene_id in new_gene_sets else gene_id for gene_id in gene_sets]
+
+        if discontinued_ids:
+            for gene_id in discontinued_ids:
+                if gene_id in gene_sets:
+                    print('removed gene id ' + str(gene_id))
+                    replaced_genesets.remove(gene_id)
+
+        return replaced_genesets
 
     @classmethod
     def _log_entrezid2ensembl_coversion(cls, entrez_genes_in, ensembl_genes_out,  log_output_file_handler):

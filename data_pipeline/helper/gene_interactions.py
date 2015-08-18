@@ -117,7 +117,7 @@ class GeneInteractions(Gene):
         abs_path_download_dir = os.path.dirname(download_file)
         zf = zipfile.ZipFile(download_file, 'r')
 
-        import_file_exists = False
+        import_file_exists = True
 
         if import_file_exists is not True:
             stage_output_file_handler = open(stage_output_file, 'w')
@@ -214,7 +214,7 @@ class GeneInteractions(Gene):
         json_target_file_path = target_file_path.replace(".out", ".json")
         interaction_source = section['source'].lower()
 
-        load_mapping = False
+        load_mapping = True
         with open(json_target_file_path, mode='w', encoding='utf-8') as f:
             f.write('{"docs":[\n')
 

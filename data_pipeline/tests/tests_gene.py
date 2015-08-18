@@ -9,6 +9,9 @@ import logging
 from data_pipeline.helper.gene_interactions import GeneInteractions
 import json
 import re
+from data_pipeline.helper.gene import Gene
+from data_pipeline.utils import IniParser
+from data_pipeline.helper.gene_pathways import GenePathways
 logger = logging.getLogger(__name__)
 
 
@@ -17,8 +20,8 @@ def tearDownModule():
     app_data_dir = os.path.dirname(data_pipeline.__file__)
     test_data_dir = app_data_dir + '/tests/data'
     stage_data_dir = test_data_dir + '/STAGE'
-    if(os.path.exists(stage_data_dir)):
-        shutil.rmtree(stage_data_dir)
+    #if(os.path.exists(stage_data_dir)):
+    #    shutil.rmtree(stage_data_dir)
 
 
 class GeneInteractionStagingTest(TestCase):
@@ -154,6 +157,21 @@ class GenePathwayStagingTest(TestCase):
 
         self.assertTrue(os.access(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.biocarta.v5.0.entrez.gmt.json', os.R_OK))
 
+        pathway = r'"REACTOME_APOPTOTIC_CLEAVAGE_OF_CELLULAR_PROTEINS"'
+        matched_json_str = None
+        with open(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.reactome.v5.0.entrez.gmt.json', 'r') as f:
+            for line in f:
+                if re.search(pathway, line):
+                    matched_json_str = line.rstrip()
+                    matched_json_str = matched_json_str[:-1]
+                    break
+
+        json_data = json.loads(matched_json_str)
+        self.assertEqual(json_data['source'], 'reactome', 'Got reactome as source')
+        self.assertEqual(json_data['pathway_name'], 'REACTOME_APOPTOTIC_CLEAVAGE_OF_CELLULAR_PROTEINS',
+                         'Got right pathway name')
+        self.assertTrue(len(json_data['gene_sets']) == 38, "Found 38 Genes in gene_sets")
+
 
 class GeneInteractionProcessTest(TestCase):
     '''Test functions in GeneInteractions class'''
@@ -260,5 +278,73 @@ class GeneInteractionProcessTest(TestCase):
                              "JSON for interaction equal")
 
 
+class GeneConversionTest(TestCase):
+
+    def test__convert_entrezid2ensembl(self):
+
+        config = IniParser().read_ini("download.ini")
+        section = config["BIOPLEX"]
+        self.assertIsNotNone(section, "Section is not none")
+        print(section)
+        gene_sets = ['26191']
+        ensembl_ids = Gene._convert_entrezid2ensembl(gene_sets, section)
+        self.assertTrue(len(ensembl_ids) == 1, "Got back one id")
+        self.assertEqual(ensembl_ids[0], "ENSG00000134242", "Got back the right ensembl id for 26191")
+
+        gene_sets = ['26191', '339457']
+        ensembl_ids = Gene._convert_entrezid2ensembl(gene_sets, section)
+        print(ensembl_ids)
+        self.assertTrue(len(ensembl_ids) == 2, "Got back 2 ensembl ids")
+        # self.assertEqual(ensembl_ids[0], "ENSG00000134242", "Got back the right ensembl id for 26191")
+
+    def test__check_gene_history(self):
+
+        config = IniParser().read_ini("download.ini")
+        section = config["BIOPLEX"]
+        self.assertIsNotNone(section, "Section is not none")
+
+        gene_sets = ['339457', '197215', '26191']
+        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
+        self.assertTrue(len(newgene_ids) == 1, "Got back one new id")
+        self.assertIn('339457', newgene_ids, "Got back 339457 in new gene ids")
+        self.assertTrue(len(discontinued_ids) == 1, "Got back one discontinued geneid")
+
+    def test__replace_oldids_with_newids(self):
+        gene_sets = ['339457', '197215', '26191']
+        new_gene_ids = {'339457': '85452'}
+        replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, new_gene_ids)
+        self.assertEqual(replaced_gene_sets, ['85452', '197215', '26191'], "Replaced 339457 with 85452")
+
+        discontinued_ids = ['197215']
+        replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, new_gene_ids, discontinued_ids)
+        print(replaced_gene_sets)
+        self.assertEqual(replaced_gene_sets, ['85452', '26191'], "Replaced 339457 with 85452")
+
+
 class GenePathwayProcessTest(TestCase):
-    pass  # ToDO
+
+    def setUp(self):
+        self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        self.app_data_dir = os.path.dirname(data_pipeline.__file__)
+        self.test_data_dir = self.app_data_dir + '/tests/data'
+
+        self.config = IniParser().read_ini("download.ini")
+        self.section = self.config["MSIGDB"]
+        self.assertIsNotNone(self.section, "Section is not none")
+
+    def test__get_pathway_source(self):
+        download_file_kegg = '/dunwich/scratch/prem/tmp/download/DOWNLOAD/MSIGDB/c2.cp.kegg.v5.0.entrez.gmt'
+        source = GenePathways._get_pathway_source(download_file_kegg)
+        self.assertTrue(source == "kegg", "Got back kegg as source")
+
+        download_file_reactome = '/dunwich/scratch/prem/tmp/download/DOWNLOAD/MSIGDB/c2.cp.reactome.v5.0.entrez.gmt'
+        source = GenePathways._get_pathway_source(download_file_reactome)
+        self.assertTrue(source == "reactome", "Got back reactome as source")
+
+        download_file_biocarta = '/dunwich/scratch/prem/tmp/download/DOWNLOAD/MSIGDB/c2.cp.biocarta.v5.0.entrez.gmt'
+        source = GenePathways._get_pathway_source(download_file_biocarta)
+        self.assertTrue(source == "biocarta", "Got back biocarta as source")
+
+        download_file_go = '/dunwich/scratch/prem/tmp/download/DOWNLOAD/MSIGDB/c5.all.v5.0.entrez.gmt'
+        source = GenePathways._get_pathway_source(download_file_go)
+        self.assertTrue(source == "GO", "Got back go as source")
