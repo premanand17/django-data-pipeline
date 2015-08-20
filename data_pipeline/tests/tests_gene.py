@@ -4,7 +4,7 @@ from django.core.management import call_command
 from django.utils.six import StringIO
 import os
 import data_pipeline
-import shutil
+# import shutil
 import logging
 from data_pipeline.helper.gene_interactions import GeneInteractions
 import json
@@ -24,7 +24,8 @@ def tearDownModule():
     test_data_dir = app_data_dir + '/tests/data'
     stage_data_dir = test_data_dir + '/STAGE'
     if(os.path.exists(stage_data_dir)):
-        shutil.rmtree(stage_data_dir)
+        # shutil.rmtree(stage_data_dir)
+        pass
 
 
 class GeneInteractionStagingTest(TestCase):
