@@ -34,7 +34,7 @@ class GeneInteractionStagingTest(TestCase):
         '''Runs before each of the tests run from this class..creates the tests/data dir'''
         logging.debug('Class setup...' + self.__class__.__name__)
         self.out = StringIO()
-        self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        self.ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
         logging.debug(self.test_data_dir)
@@ -145,7 +145,7 @@ class GenePathwayStagingTest(TestCase):
         '''Runs before each of the tests run from this class..creates the tests/data dir'''
         logging.debug('Class setup...' + self.__class__.__name__)
         self.out = StringIO()
-        self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        self.ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
         logging.debug(self.test_data_dir)
@@ -290,7 +290,7 @@ class GeneConversionTest(TestCase):
     '''Tests entrez2ensembl conversion functions'''
     def test__convert_entrezid2ensembl(self):
 
-        config = IniParser().read_ini("download.ini")
+        config = IniParser().read_ini("tests/test_download.ini")
         section = config["BIOPLEX"]
         self.assertIsNotNone(section, "Section is not none")
 
@@ -306,7 +306,7 @@ class GeneConversionTest(TestCase):
 
     def test__check_gene_history(self):
         '''Test if the right newid is fetched from genehistory'''
-        config = IniParser().read_ini("download.ini")
+        config = IniParser().read_ini("tests/test_download.ini")
         section = config["BIOPLEX"]
         self.assertIsNotNone(section, "Section is not none")
 
@@ -333,11 +333,11 @@ class GenePathwayProcessTest(TestCase):
 
     def setUp(self):
         '''Runs before each of the tests run from this class..creates the tests/data dir'''
-        self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        self.ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
 
-        self.config = IniParser().read_ini("download.ini")
+        self.config = IniParser().read_ini("tests/test_download.ini")
         self.section = self.config["MSIGDB"]
         self.assertIsNotNone(self.section, "Section is not none")
 

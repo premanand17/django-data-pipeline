@@ -119,7 +119,7 @@ class GeneInteractions(Gene):
 
         import_file_exists = False
 
-        if import_file_exists is not True:
+        if import_file_exists is False:
             stage_output_file_handler = open(stage_output_file, 'w')
             header_line = 'interactorA' + '\t' + 'interactorB' + '\t' + 'pubmed' + '\n'
 
