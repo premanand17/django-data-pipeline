@@ -16,17 +16,22 @@ logger = logging.getLogger(__name__)
 
 
 def tearDownModule():
+    '''This is module level tearDown, will run after all the test are ran in this module
+    Removes the test data dirs
+    '''
     logging.debug('Module teardown...')
     app_data_dir = os.path.dirname(data_pipeline.__file__)
     test_data_dir = app_data_dir + '/tests/data'
     stage_data_dir = test_data_dir + '/STAGE'
-    #if(os.path.exists(stage_data_dir)):
-    #    shutil.rmtree(stage_data_dir)
+    if(os.path.exists(stage_data_dir)):
+        shutil.rmtree(stage_data_dir)
 
 
 class GeneInteractionStagingTest(TestCase):
+    '''Test interaction staging'''
 
     def setUp(self):
+        '''Runs before each of the tests run from this class..creates the tests/data dir'''
         logging.debug('Class setup...' + self.__class__.__name__)
         self.out = StringIO()
         self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
@@ -65,7 +70,7 @@ class GeneInteractionStagingTest(TestCase):
         self.assertIn("intact", interactor_line, "contains intact as interaction_source")
 
     def test_intact_staged_output_files(self):
-
+        '''Test to check the processed json output files'''
         # preinitialize dict
         expected_interactors = [
             {"interactor": "ENSG00000115641", "pubmed": "11001931"},
@@ -77,6 +82,7 @@ class GeneInteractionStagingTest(TestCase):
             {"interactor": "ENSG00000185043", "pubmed": "10366599"}
             ]
 
+        # assertDictEqual should return True even if the keys-value pairs are in different order
         expected_interactors2 = {'ENSG00000171552': '9437013', 'ENSG00000196924': '11001931'}
         expected_interactors3 = {'ENSG00000196924': '11001931', 'ENSG00000171552': '9437013'}
         self.assertDictEqual(expected_interactors2, expected_interactors3, "dict with interactor order changed equal")
@@ -134,8 +140,9 @@ class GeneInteractionStagingTest(TestCase):
 
 
 class GenePathwayStagingTest(TestCase):
-
+    '''Test gene pathway staging'''
     def setUp(self):
+        '''Runs before each of the tests run from this class..creates the tests/data dir'''
         logging.debug('Class setup...' + self.__class__.__name__)
         self.out = StringIO()
         self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
@@ -177,7 +184,7 @@ class GeneInteractionProcessTest(TestCase):
     '''Test functions in GeneInteractions class'''
 
     def test_check_binary_interactions(self):
-
+        '''Test if the grouping of the binary interactions including the evidence is working correctly'''
         gene_interactors = {
             'gene0': [{'gene1:evidence1'}, {'gene2:evidence2'}],
             'gene1': [{'gene0:evidence0'}, {'gene2:evidence2'}, {'gene3:evidence3'}]
@@ -247,6 +254,7 @@ class GeneInteractionProcessTest(TestCase):
         self.assertIn({'1': None}, grouped_interactions['0'], "value 1 is in dict['0'] ")
 
     def test_interactor_json_decorator(self):
+        '''Test if the dict passed is returned as json with the interactor and evidence as the keys'''
         json_a = GeneInteractions.interactor_json_decorator({"geneA": None})
         self.assertDictEqual(json_a, {'interactor': 'geneA'}, "JSON equal for geneA")
 
@@ -255,7 +263,7 @@ class GeneInteractionProcessTest(TestCase):
                              "JSON equal for geneA with evidence")
 
     def test_interaction_json_decorator(self):
-
+        '''Test if the interaction with interactors and source is returned correctly'''
         json_interaction = GeneInteractions.interaction_json_decorator("intact",
                                                                        "geneA",
                                                                        [{"geneB": "1234"},
@@ -279,13 +287,13 @@ class GeneInteractionProcessTest(TestCase):
 
 
 class GeneConversionTest(TestCase):
-
+    '''Tests entrez2ensembl conversion functions'''
     def test__convert_entrezid2ensembl(self):
 
         config = IniParser().read_ini("download.ini")
         section = config["BIOPLEX"]
         self.assertIsNotNone(section, "Section is not none")
-        print(section)
+
         gene_sets = ['26191']
         ensembl_ids = Gene._convert_entrezid2ensembl(gene_sets, section)
         self.assertTrue(len(ensembl_ids) == 1, "Got back one id")
@@ -293,12 +301,11 @@ class GeneConversionTest(TestCase):
 
         gene_sets = ['26191', '339457']
         ensembl_ids = Gene._convert_entrezid2ensembl(gene_sets, section)
-        print(ensembl_ids)
         self.assertTrue(len(ensembl_ids) == 2, "Got back 2 ensembl ids")
         # self.assertEqual(ensembl_ids[0], "ENSG00000134242", "Got back the right ensembl id for 26191")
 
     def test__check_gene_history(self):
-
+        '''Test if the right newid is fetched from genehistory'''
         config = IniParser().read_ini("download.ini")
         section = config["BIOPLEX"]
         self.assertIsNotNone(section, "Section is not none")
@@ -310,6 +317,7 @@ class GeneConversionTest(TestCase):
         self.assertTrue(len(discontinued_ids) == 1, "Got back one discontinued geneid")
 
     def test__replace_oldids_with_newids(self):
+        '''Test if the old ids are getting replaced wih newids'''
         gene_sets = ['339457', '197215', '26191']
         new_gene_ids = {'339457': '85452'}
         replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, new_gene_ids)
@@ -324,6 +332,7 @@ class GeneConversionTest(TestCase):
 class GenePathwayProcessTest(TestCase):
 
     def setUp(self):
+        '''Runs before each of the tests run from this class..creates the tests/data dir'''
         self.ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
@@ -333,6 +342,7 @@ class GenePathwayProcessTest(TestCase):
         self.assertIsNotNone(self.section, "Section is not none")
 
     def test__get_pathway_source(self):
+        '''Test if the right source name is returned given a download file '''
         download_file_kegg = '/dunwich/scratch/prem/tmp/download/DOWNLOAD/MSIGDB/c2.cp.kegg.v5.0.entrez.gmt'
         source = GenePathways._get_pathway_source(download_file_kegg)
         self.assertTrue(source == "kegg", "Got back kegg as source")

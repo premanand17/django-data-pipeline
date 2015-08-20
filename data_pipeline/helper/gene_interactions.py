@@ -117,7 +117,7 @@ class GeneInteractions(Gene):
         abs_path_download_dir = os.path.dirname(download_file)
         zf = zipfile.ZipFile(download_file, 'r')
 
-        import_file_exists = True
+        import_file_exists = False
 
         if import_file_exists is not True:
             stage_output_file_handler = open(stage_output_file, 'w')
