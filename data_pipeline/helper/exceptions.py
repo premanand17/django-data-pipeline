@@ -1,3 +1,4 @@
+''' Pipeline exceptions '''
 
 
 class PublicationDownloadError(Exception):

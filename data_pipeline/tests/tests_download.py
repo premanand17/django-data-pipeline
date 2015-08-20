@@ -6,6 +6,36 @@ from django.utils.six import StringIO
 from elastic.elastic_settings import ElasticSettings
 import os
 import requests
+import data_pipeline
+from data_pipeline.utils import IniParser
+from elastic.search import Search, ElasticQuery
+import shutil
+
+IDX_SUFFIX = ElasticSettings.getattr('TEST')
+MY_PUB_INI_FILE = os.path.join(os.path.dirname(__file__), IDX_SUFFIX + '_test_publication.ini')
+TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
+
+
+def setUpModule():
+    ''' Change ini config (MY_PUB_INI_FILE) to use the test suffix when
+    creating publication pipeline index. '''
+    ini_file = os.path.join(os.path.dirname(__file__), 'test_publication.ini')
+    if os.path.isfile(MY_PUB_INI_FILE):
+        return
+
+    with open(MY_PUB_INI_FILE, 'w') as new_file:
+        with open(ini_file) as old_file:
+            for line in old_file:
+                new_file.write(line.replace('auto_tests', IDX_SUFFIX))
+
+
+def tearDownModule():
+    # remove index created
+    INI_CONFIG = IniParser().read_ini(MY_PUB_INI_FILE)
+    requests.delete(ElasticSettings.url() + '/' + INI_CONFIG['DISEASE']['index'])
+    os.remove(MY_PUB_INI_FILE)
+    if os.path.exists(TEST_DATA_DIR + '/STAGE'):
+        shutil.rmtree(TEST_DATA_DIR + '/STAGE')
 
 
 class DownloadTest(TestCase):
@@ -13,17 +43,29 @@ class DownloadTest(TestCase):
     def test_ini_file(self):
         ''' Test ini file downloads. '''
         out = StringIO()
-        ini_file = os.path.join(os.path.dirname(__file__), 'download.ini')
+        ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
         call_command('pipeline', '--steps', 'download', sections='ENSEMBL_GENE', dir='/tmp', ini=ini_file, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
 
     def test_pub_ini_file(self):
         ''' Test publication ini file downloads. '''
         out = StringIO()
-        ini_file = os.path.join(os.path.dirname(__file__), 'publication.ini')
-        call_command('publications', '--dir', '/tmp', '--steps', 'download', 'load', ini=ini_file, stdout=out)
+        call_command('publications', '--dir', '/tmp', '--steps', 'download', 'load',
+                     sections='DISEASE::CRO,DISEASE::T1D', ini=MY_PUB_INI_FILE, stdout=out)
         self.assertEqual(out.getvalue().strip(), "DOWNLOAD COMPLETE")
-        requests.delete(ElasticSettings.url() + '/' + 'test__publications')
+
+    def test_pub_ini_file2(self):
+        ''' Test publication pipeline with a list of PMIDs. '''
+        out = StringIO()
+        call_command('publications', '--dir', TEST_DATA_DIR, '--steps', 'load',
+                     sections='DISEASE::TEST', ini=MY_PUB_INI_FILE, stdout=out)
+        INI_CONFIG = IniParser().read_ini(MY_PUB_INI_FILE)
+        idx = INI_CONFIG['DISEASE']['index']
+        Search.index_refresh(idx)
+        query = ElasticQuery.query_string("test", fields=["tags.disease"])
+        elastic = Search(query, idx=idx)
+        docs = elastic.search().docs
+        self.assertGreater(len(docs), 1)
 
     def test_file_cmd(self):
         out = StringIO()

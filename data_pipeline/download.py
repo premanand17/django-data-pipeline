@@ -175,7 +175,7 @@ class MartDownload(object):
             '<?xml version="1.0" encoding="UTF-8"?>' \
             '<!DOCTYPE Query>' \
             '<Query virtualSchemaName="default" formatter="TSV" ' \
-            'header="0" uniqueRows="0" count="" datasetConfigVersion="0.6">' \
+            'header="0" uniqueRows="1" count="" datasetConfigVersion="0.6">' \
             '<Dataset name="%s" interface="default">%s%s' \
             '</Dataset>' \
             '</Query>' % (url, tax, query_filter, attrs_str)
