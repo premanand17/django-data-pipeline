@@ -9,7 +9,11 @@ from elastic.elastic_settings import ElasticSettings
 import requests
 from elastic.search import Search, ElasticQuery
 from data_pipeline.helper.gene import Gene
+import logging
+import json
 
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 IDX_SUFFIX = ElasticSettings.getattr('TEST')
 MY_INI_FILE = os.path.join(os.path.dirname(__file__), IDX_SUFFIX + '_test_download.ini')
 TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
@@ -70,8 +74,12 @@ class LoadTest(TestCase):
         Search.index_refresh(idx)
 
         self.assertGreaterEqual(elastic.get_count()['count'], 1, "Count documents in the index")
-        map_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
-        self._cmpMappings(elastic.get_mapping()[idx]['mappings'], map_props, idx_type)
+        map1_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
+        map2_props = elastic.get_mapping()
+        if idx not in map2_props:
+            logger.error("MAPPING ERRROR: ")
+            logger.error(json.dumps(map2_props))
+        self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
         ''' 2. Test adding entrez ID to documents '''
         call_command('pipeline', '--steps', 'load', sections='GENE2ENSEMBL',
@@ -144,8 +152,12 @@ class LoadTest(TestCase):
         Search.index_refresh(idx)
 
         self.assertTrue(elastic.get_count()['count'] > 1, "Count documents in the index")
-        map_props = Gene.gene_history_mapping(idx, idx_type, test_mode=True).mapping_properties
-        self._cmpMappings(elastic.get_mapping()[idx]['mappings'], map_props, idx_type)
+        map1_props = Gene.gene_history_mapping(idx, idx_type, test_mode=True).mapping_properties
+        map2_props = elastic.get_mapping()
+        if idx not in map2_props:
+            logger.error("MAPPING ERRROR: ")
+            logger.error(json.dumps(map2_props))
+        self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
     def _cmpMappings(self, map1, map2, idx_type):
         ''' Compare property keys and the types for two mappings. '''
