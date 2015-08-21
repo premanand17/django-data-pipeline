@@ -76,7 +76,7 @@ class LoadTest(TestCase):
         self.assertGreaterEqual(elastic.get_count()['count'], 1, "Count documents in the index")
         map1_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
         map2_props = elastic.get_mapping()
-        if idx not in {}:
+        if idx not in map2_props:
             logger.error("MAPPING ERROR: "+json.dumps(map2_props))
         self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
