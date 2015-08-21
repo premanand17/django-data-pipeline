@@ -43,6 +43,9 @@ class Download(IniParser):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
         success = False
+        username = section['username'] if 'username' in section else None
+        password = section['password'] if 'password' in section else None
+
         if 'output' in section:
             fname = section['output']
 
@@ -59,10 +62,11 @@ class Download(IniParser):
             elif 'files' in section:
                 files = section['files'].split(",")
                 for f in files:
-                    success = self.download(section['location']+"/"+f.strip(), dir_path)
+                    success = self.download(section['location']+"/"+f.strip(), dir_path,
+                                            username=username, password=password)
             elif 'http_params' in section:
                 success = self.download(section['location']+"?"+section['http_params'],
-                                        dir_path, file_name=fname)
+                                        dir_path, file_name=fname, username=username, password=password)
         return success
 
     def _url_to_file_name(self, url):
@@ -76,8 +80,13 @@ class HTTPDownload(object):
     ''' HTTP downloader. '''
 
     @classmethod
-    def download(cls, url, dir_path, file_name, append=False):
-        r = requests.get(url, stream=True, timeout=10)
+    def download(cls, url, dir_path, file_name, append=False, username=None, password=None):
+
+        if username is not None:
+            r = requests.get(url, auth=(username, password), stream=True, timeout=10)
+        else:
+            r = requests.get(url, stream=True, timeout=10)
+
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)
             return False
@@ -108,6 +117,9 @@ class FTPDownload(object):
     @classmethod
     def download(cls, url, dir_path, file_name, username='anonymous', password=''):
         url_parse = urlparse(url)
+
+        if username is None: username = 'anonymous'  # @IgnorePep8
+
         ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
                                    session_factory=ftplib.FTP)
         size = ftp_host.path.getsize(url_parse.path)
