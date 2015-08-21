@@ -13,6 +13,8 @@ import re
 import gzip
 import logging
 from data_pipeline.helper.gene import Gene
+from data_pipeline.helper.gene_interactions import GeneInteractions
+from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
 # Get an instance of a logger
@@ -128,7 +130,17 @@ class PostProcess(object):
         if 'output' in section:
             return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['output'])
         elif 'files' in section:
-            return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
+            download_files = []
+            ff = section['files'].split(',')
+            if len(ff) > 1:
+                for f in ff:
+                    download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
+                                                 f.strip())
+                    download_files.append(download_file)
+                    print(download_files)
+                return download_files
+            else:
+                return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
 
     ''' Pipeline methods '''
     @classmethod
@@ -282,7 +294,14 @@ class PostProcess(object):
         stage_output_file = cls._get_stage_output_file(*args, **kwargs)
         download_file = cls._get_download_file(*args, **kwargs)
         section = kwargs['section']
-        Gene.gene_interaction_parse(download_file, stage_output_file, section)
+        GeneInteractions.gene_interaction_parse(download_file, stage_output_file, section)
+
+    @classmethod
+    def gene_pathway_parse(cls, *args, **kwargs):
+        stage_output_file = cls._get_stage_output_file(*args, **kwargs)
+        download_files = cls._get_download_file(*args, **kwargs)
+        section = kwargs['section']
+        GenePathways.gene_pathway_parse(download_files, stage_output_file, section)
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
