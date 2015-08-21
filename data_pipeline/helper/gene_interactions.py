@@ -337,7 +337,9 @@ class GeneInteractions(Gene):
 
     @classmethod
     def interactor_json_decorator(cls, gene_interactor, evidence_key="pubmed"):
-
+        '''Given a dict  {geneA:12345}, returns back formatted json string as
+        {'interactor': 'geneA'} or {'interactor': 'geneA', 'pubmed':12345}
+        '''
         interactor, evidence_value = list(gene_interactor.items())[0]
 
         if evidence_value is not None:
@@ -352,6 +354,7 @@ class GeneInteractions(Gene):
     @classmethod
     def interaction_json_decorator(cls, interaction_source, parent, gene_list):
         '''
+        Given a interactor list, returns the json formatted interaction
          {"interaction_source": "bioplex", "interactors": [{"interactor": "ENSG00000143416"},
                                                   {"interactor": "ENSG00000102043"},
                                                   {"interactor": "ENSG00000079387"},
