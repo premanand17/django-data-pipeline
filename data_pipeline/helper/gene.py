@@ -203,6 +203,47 @@ class Gene(object):
             gene['dbxrefs'].update({db: dbxref})
 
     @classmethod
+    def ensmart_homolog_parse(cls, ensmart_f, attrs, idx, idx_type):
+        ''' Add homolog information. '''
+        genes = {}
+        homologs = [a.strip().replace('_homolog_ensembl_gene', '') for a in attrs.split(',')
+                    if a.strip() != 'ensembl_gene_id']
+        for ensmart in ensmart_f:
+            parts = ensmart.split('\t')
+            ens_id = parts[0]
+            if len(parts) > len(homologs)+1:
+                logger.warn('IGNORE ORTHOLOGS '+ens_id+' :: '+ensmart)
+                continue
+            dbxrefs = {}
+            for i in range(len(parts)):
+                if parts[i].strip() != '':
+                    dbxrefs[homologs[i-1]] = parts[i].strip()
+            if len(dbxrefs) > 0:
+                genes[ens_id] = dbxrefs
+
+        '''  search for the entrez ids '''
+        query = ElasticQuery(Query.ids(list(genes.keys())))
+        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
+        chunk_size = 450
+        for i in range(0, len(docs), chunk_size):
+            docs_chunk = docs[i:i+chunk_size]
+            json_data = ''
+            for doc in docs_chunk:
+                ens_id = doc._meta['_id']
+                if 'dbxrefs' in doc.__dict__:
+                    dbxrefs = getattr(doc, 'dbxrefs')
+                else:
+                    dbxrefs = {}
+                dbxrefs['orthologs'] = genes[ens_id]
+                idx_type = doc.type()
+                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                       "_index": idx, "_retry_on_conflict": 3}}
+                json_data += json.dumps(doc_data) + '\n'
+                json_data += json.dumps({'doc': {'dbxrefs': dbxrefs}}) + '\n'
+            if json_data != '':
+                Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
     def gene_info_parse(cls, gene_infos, idx):
         ''' Parse gene_info file from NCBI and add info to gene index. '''
 
