@@ -76,9 +76,8 @@ class LoadTest(TestCase):
         self.assertGreaterEqual(elastic.get_count()['count'], 1, "Count documents in the index")
         map1_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
         map2_props = elastic.get_mapping()
-        if idx not in map2_props:
-            logger.error("MAPPING ERRROR: ")
-            logger.error(json.dumps(map2_props))
+        if idx not in {}:
+            logger.error("MAPPING ERROR: "+json.dumps(map2_props))
         self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
         ''' 2. Test adding entrez ID to documents '''
@@ -120,6 +119,18 @@ class LoadTest(TestCase):
         docs = elastic.search().docs
         self.assertGreater(len(getattr(docs[0], "pmids")), 0)
 
+        ''' 6. Add ortholog data. '''
+        call_command('pipeline', '--steps', 'load', sections='ENSMART_HOMOLOG',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        query = ElasticQuery.query_string("PTPN22", fields=["symbol"])
+        elastic = Search(query, idx=idx)
+        docs = elastic.search().docs
+        dbxrefs = getattr(docs[0], "dbxrefs")
+        self.assertTrue('orthologs' in dbxrefs, dbxrefs)
+        self.assertTrue('mmusculus' in dbxrefs['orthologs'], dbxrefs)
+        self.assertTrue('ENSMUSG00000027843' in dbxrefs['orthologs']['mmusculus'])
+
     def test_marker_pipeline(self):
         ''' Test marker pipeline. '''
         call_command('pipeline', '--steps', 'load', sections='DBSNP',
@@ -155,8 +166,7 @@ class LoadTest(TestCase):
         map1_props = Gene.gene_history_mapping(idx, idx_type, test_mode=True).mapping_properties
         map2_props = elastic.get_mapping()
         if idx not in map2_props:
-            logger.error("MAPPING ERRROR: ")
-            logger.error(json.dumps(map2_props))
+            logger.error("MAPPING ERROR: "+json.dumps(map2_props))
         self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
     def _cmpMappings(self, map1, map2, idx_type):
