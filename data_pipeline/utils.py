@@ -162,6 +162,15 @@ class PostProcess(object):
                                     kwargs['section']['index_type'])
 
     @classmethod
+    def ensmart_homolog_parse(cls, *args, **kwargs):
+        ''' Parse result from ensembl mart. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as ensmart_f:
+            Gene.ensmart_homolog_parse(ensmart_f, kwargs['section']['attrs'],
+                                       kwargs['section']['index'],
+                                       kwargs['section']['index_type'])
+
+    @classmethod
     def gene2ensembl_parse(cls, *args, **kwargs):
         ''' Parse gene2ensembl file from NCBI. '''
         download_file = cls._get_download_file(*args, **kwargs)

@@ -18,6 +18,7 @@ class Command(BaseCommand):
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_GENE --steps download load
     ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_INFO --steps download load
     ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_PUBS --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_HOMOLOG --steps download load
 
     Update gene suggester weighting:
     python criteria_suggester.py gene
