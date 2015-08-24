@@ -63,16 +63,16 @@ class LoadTest(TestCase):
     def test_gene_pipeline(self):
         ''' Test gene pipeline. '''
 
-        ''' 1. Test ensembl GTF loading. '''
-        call_command('pipeline', '--steps', 'stage', 'load', sections='ENSEMBL_GENE_GTF',
-                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
-
         INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
         idx = INI_CONFIG['ENSEMBL_GENE_GTF']['index']
         idx_type = INI_CONFIG['ENSEMBL_GENE_GTF']['index_type']
-        elastic = Search(idx=idx, idx_type=idx_type)
+
+        ''' 1. Test ensembl GTF loading. '''
+        call_command('pipeline', '--steps', 'stage', 'load', sections='ENSEMBL_GENE_GTF',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
         Search.index_refresh(idx)
 
+        elastic = Search(idx=idx, idx_type=idx_type)
         self.assertGreaterEqual(elastic.get_count()['count'], 1, "Count documents in the index")
         map1_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
         map2_props = elastic.get_mapping()
