@@ -44,7 +44,7 @@ class Gene(object):
         load = Loader()
         options = {"indexName": idx, "shards": 5}
         if not test_mode:
-            load.mapping(props, 'gene', analyzer=Loader.KEYWORD_ANALYZER, **options)
+            load.mapping(props, idx_type, analyzer=Loader.KEYWORD_ANALYZER, **options)
         return props
 
     @classmethod
