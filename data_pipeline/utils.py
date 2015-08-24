@@ -357,9 +357,8 @@ class IniParser(object):
         ''' Loop over all sections in the config file and process. '''
         success = False
         for section_name in config.sections():
-            if sections is not None and section_name not in sections:
+            if sections is not None and not self._is_section_match(section_name, sections):
                 continue
-
             section_dir_name = self._inherit_section(section_name, config)
             dir_path = os.path.join(base_dir_path, self.__class__.__name__.upper(), section_dir_name)
             success = self.process_section(section_name, section_dir_name, base_dir_path,
@@ -370,6 +369,14 @@ class IniParser(object):
     def process_section(self, section_name, section_dir_name, base_dir_path,
                         dir_path='.', section=None, stage=None):
         raise NotImplementedError("Inheriting class should implement this  method")
+
+    def _is_section_match(self, name, sections):
+        ''' Check if a section name marched the comma separated list of sections. '''
+        arr = sections.split(',')
+        for s in arr:
+            if s.strip() == name:
+                return True
+        return False
 
     def _inherit_section(self, section_name, config):
         ''' Add in parameters from another config section when a double colon
