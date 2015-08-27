@@ -17,7 +17,7 @@ from data_pipeline.helper.gene_interactions import GeneInteractions
 from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
-# Get an instance of a logger
+
 logger = logging.getLogger(__name__)
 
 
@@ -201,6 +201,12 @@ class PostProcess(object):
         Gene.gene_history_mapping(kwargs['section']['index'], kwargs['section']['index_type'])
         with gzip.open(download_file, 'rt') as gene_his_f:
             Gene.gene_history_parse(gene_his_f, kwargs['section']['index'], kwargs['section']['index_type'])
+
+    @classmethod
+    def gene_mgi_parse(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as gene_mgi_f:
+            Gene.gene_mgi_parse(gene_mgi_f, kwargs['section']['index'])
 
     ''' Marker downloads '''
     @classmethod
