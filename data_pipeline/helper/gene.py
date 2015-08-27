@@ -6,6 +6,7 @@ from elastic.search import ElasticQuery, Search
 from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
+from data_pipeline.helper.exceptions import PipelineError
 import json
 
 logger = logging.getLogger(__name__)
@@ -324,6 +325,10 @@ class Gene(object):
         orthogenes_mgi = {}
         for gene_mgi in gene_pubs:
             parts = gene_mgi.split('\t')
+            if 'MGI:' not in parts[0]:
+                raise PipelineError('MGI not found '+parts[0])
+            if 'ENSMUSG' not in parts[5]:
+                raise PipelineError('ENSMUSG not found '+parts[5])
             orthogenes_mgi[parts[5]] = parts[0].replace('MGI:', '')
 
         orthogene_keys = list(orthogenes_mgi.keys())
