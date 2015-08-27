@@ -35,10 +35,16 @@ class Gene(object):
              .add_property("strand", "string") \
              .add_property("description", "string") \
              .add_property("biotype", "string") \
-             .add_property("dbxrefs", "object") \
              .add_property("pmids", "string") \
              .add_property("suggest", "completion",
                            index_analyzer="full_name", search_analyzer="full_name")
+
+        dbxref_props = cls._get_nested_prop("dbxrefs", "ensembl")
+        ortholog_props = MappingProperties("orthologs")
+        ortholog_props.add_properties(cls._get_nested_prop("mmusculus", "ensembl"))
+        ortholog_props.add_properties(cls._get_nested_prop("rnorvegicus", "ensembl"))
+        dbxref_props.add_properties(ortholog_props)
+        props.add_properties(dbxref_props)
 
         ''' create index and add mapping '''
         load = Loader()
@@ -46,6 +52,12 @@ class Gene(object):
         if not test_mode:
             load.mapping(props, idx_type, analyzer=Loader.KEYWORD_ANALYZER, **options)
         return props
+
+    @classmethod
+    def _get_nested_prop(cls, nested_name, prop_name):
+        org_props = MappingProperties(nested_name)
+        org_props.add_property(prop_name, "string", index="not_analyzed")
+        return org_props
 
     @classmethod
     def gene_history_mapping(cls, idx, idx_type, test_mode=False):
@@ -212,7 +224,7 @@ class Gene(object):
             dbxrefs = {}
             for i in range(len(parts)):
                 if parts[i].strip() != '':
-                    dbxrefs[homologs[i-1]] = parts[i].strip()
+                    dbxrefs[homologs[i-1]] = {"ensembl": parts[i].strip()}
             if len(dbxrefs) > 0:
                 genes[ens_id] = dbxrefs
 
@@ -305,6 +317,37 @@ class Gene(object):
                     json_data = ''
         if line_num > 0:
             Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
+    def gene_mgi_parse(cls, gene_pubs, idx):
+        ''' Parse Ensembl and MGI data from JAX. '''
+        orthogenes_mgi = {}
+        for gene_mgi in gene_pubs:
+            parts = gene_mgi.split('\t')
+            orthogenes_mgi[parts[5]] = parts[0].replace('MGI:', '')
+
+        orthogene_keys = list(orthogenes_mgi.keys())
+        chunk_size = 450
+        for i in range(0, len(orthogene_keys), chunk_size):
+            chunk_gene_keys = orthogene_keys[i:i+chunk_size]
+            json_data = ''
+            query = ElasticQuery.filtered(Query.match_all(),
+                                          TermsFilter.get_terms_filter("dbxrefs.orthologs.mmusculus.ensembl",
+                                                                       chunk_gene_keys))
+            docs = Search(query, idx=idx, size=chunk_size).search().docs
+            for doc in docs:
+                ens_id = doc.doc_id()
+                idx_type = doc.type()
+                mm = getattr(doc, 'dbxrefs')['orthologs']['mmusculus']
+                mm['MGI'] = orthogenes_mgi[mm['ensembl']]
+                dbxrefs = {"dbxrefs": {'orthologs': {"mmusculus": mm}}}
+                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                       "_index": idx, "_retry_on_conflict": 3}}
+                json_data += json.dumps(doc_data) + '\n'
+                json_data += json.dumps({'doc': dbxrefs}) + '\n'
+
+            if json_data != '':
+                Loader().bulk_load(idx, idx_type, json_data)
 
     @classmethod
     def _update_gene(cls, genes, idx):
