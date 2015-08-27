@@ -122,14 +122,18 @@ class FTPDownload(object):
 
         ftp_host = ftputil.FTPHost(url_parse.netloc, username, password,
                                    session_factory=ftplib.FTP)
-        size = ftp_host.path.getsize(url_parse.path)
+        try:
+            size = ftp_host.path.getsize(url_parse.path)
+        except RuntimeError:
+            size = 1000
+
         mon = Monitor(file_name, size=size)
         ftp_host.download(url_parse.path, os.path.join(dir_path, file_name), callback=mon)
         ftp_host.close()
 
         if mon.size_progress != size:
             logger.error(file_name)
-            logger.error("download size: "+mon.size_progress+" server size: "+size)
+            logger.error("download size: "+str(mon.size_progress)+" server size: "+str(size))
         return mon.size_progress == size
 
     @classmethod

@@ -11,6 +11,7 @@ from elastic.search import Search, ElasticQuery
 from data_pipeline.helper.gene import Gene
 import logging
 import json
+from elastic.query import Query, TermsFilter
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
@@ -129,7 +130,22 @@ class LoadTest(TestCase):
         dbxrefs = getattr(docs[0], "dbxrefs")
         self.assertTrue('orthologs' in dbxrefs, dbxrefs)
         self.assertTrue('mmusculus' in dbxrefs['orthologs'], dbxrefs)
-        self.assertTrue('ENSMUSG00000027843' in dbxrefs['orthologs']['mmusculus'])
+        self.assertEqual('ENSMUSG00000027843', dbxrefs['orthologs']['mmusculus']['ensembl'])
+
+        query = ElasticQuery.filtered(Query.match_all(),
+                                      TermsFilter.get_terms_filter("dbxrefs.orthologs.mmusculus.ensembl",
+                                                                   ['ENSMUSG00000027843']))
+        docs = Search(query, idx=idx, size=1).search().docs
+        self.assertEqual(len(docs), 1)
+
+        ''' 7. Add mouse ortholog link to MGI '''
+        call_command('pipeline', '--steps', 'load', sections='ENSEMBL2MGI',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        docs = Search(query, idx=idx, size=1).search().docs
+        dbxrefs = getattr(docs[0], "dbxrefs")
+        self.assertEqual('ENSMUSG00000027843', dbxrefs['orthologs']['mmusculus']['ensembl'])
+        self.assertEqual('107170', dbxrefs['orthologs']['mmusculus']['MGI'])
 
     def test_marker_pipeline(self):
         ''' Test marker pipeline. '''
