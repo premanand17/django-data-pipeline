@@ -9,7 +9,12 @@ from elastic.elastic_settings import ElasticSettings
 import requests
 from elastic.search import Search, ElasticQuery
 from data_pipeline.helper.gene import Gene
+import logging
+import json
+from elastic.query import Query, TermsFilter
 
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 IDX_SUFFIX = ElasticSettings.getattr('TEST')
 MY_INI_FILE = os.path.join(os.path.dirname(__file__), IDX_SUFFIX + '_test_download.ini')
 TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
@@ -59,19 +64,22 @@ class LoadTest(TestCase):
     def test_gene_pipeline(self):
         ''' Test gene pipeline. '''
 
-        ''' 1. Test ensembl GTF loading. '''
-        call_command('pipeline', '--steps', 'stage', 'load', sections='ENSEMBL_GENE_GTF',
-                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
-
         INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
         idx = INI_CONFIG['ENSEMBL_GENE_GTF']['index']
         idx_type = INI_CONFIG['ENSEMBL_GENE_GTF']['index_type']
-        elastic = Search(idx=idx, idx_type=idx_type)
+
+        ''' 1. Test ensembl GTF loading. '''
+        call_command('pipeline', '--steps', 'stage', 'load', sections='ENSEMBL_GENE_GTF',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
         Search.index_refresh(idx)
 
+        elastic = Search(idx=idx, idx_type=idx_type)
         self.assertGreaterEqual(elastic.get_count()['count'], 1, "Count documents in the index")
-        map_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
-        self._cmpMappings(elastic.get_mapping()[idx]['mappings'], map_props, idx_type)
+        map1_props = Gene.gene_mapping(idx, idx_type, test_mode=True).mapping_properties
+        map2_props = elastic.get_mapping()
+        if idx not in map2_props:
+            logger.error("MAPPING ERROR: "+json.dumps(map2_props))
+        self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
         ''' 2. Test adding entrez ID to documents '''
         call_command('pipeline', '--steps', 'load', sections='GENE2ENSEMBL',
@@ -112,6 +120,33 @@ class LoadTest(TestCase):
         docs = elastic.search().docs
         self.assertGreater(len(getattr(docs[0], "pmids")), 0)
 
+        ''' 6. Add ortholog data. '''
+        call_command('pipeline', '--steps', 'load', sections='ENSMART_HOMOLOG',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        query = ElasticQuery.query_string("PTPN22", fields=["symbol"])
+        elastic = Search(query, idx=idx)
+        docs = elastic.search().docs
+        dbxrefs = getattr(docs[0], "dbxrefs")
+        self.assertTrue('orthologs' in dbxrefs, dbxrefs)
+        self.assertTrue('mmusculus' in dbxrefs['orthologs'], dbxrefs)
+        self.assertEqual('ENSMUSG00000027843', dbxrefs['orthologs']['mmusculus']['ensembl'])
+
+        query = ElasticQuery.filtered(Query.match_all(),
+                                      TermsFilter.get_terms_filter("dbxrefs.orthologs.mmusculus.ensembl",
+                                                                   ['ENSMUSG00000027843']))
+        docs = Search(query, idx=idx, size=1).search().docs
+        self.assertEqual(len(docs), 1)
+
+        ''' 7. Add mouse ortholog link to MGI '''
+        call_command('pipeline', '--steps', 'load', sections='ENSEMBL2MGI',
+                     dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+        Search.index_refresh(idx)
+        docs = Search(query, idx=idx, size=1).search().docs
+        dbxrefs = getattr(docs[0], "dbxrefs")
+        self.assertEqual('ENSMUSG00000027843', dbxrefs['orthologs']['mmusculus']['ensembl'])
+        self.assertEqual('107170', dbxrefs['orthologs']['mmusculus']['MGI'])
+
     def test_marker_pipeline(self):
         ''' Test marker pipeline. '''
         call_command('pipeline', '--steps', 'load', sections='DBSNP',
@@ -144,8 +179,11 @@ class LoadTest(TestCase):
         Search.index_refresh(idx)
 
         self.assertTrue(elastic.get_count()['count'] > 1, "Count documents in the index")
-        map_props = Gene.gene_history_mapping(idx, idx_type, test_mode=True).mapping_properties
-        self._cmpMappings(elastic.get_mapping()[idx]['mappings'], map_props, idx_type)
+        map1_props = Gene.gene_history_mapping(idx, idx_type, test_mode=True).mapping_properties
+        map2_props = elastic.get_mapping()
+        if idx not in map2_props:
+            logger.error("MAPPING ERROR: "+json.dumps(map2_props))
+        self._cmpMappings(map2_props[idx]['mappings'], map1_props, idx_type)
 
     def _cmpMappings(self, map1, map2, idx_type):
         ''' Compare property keys and the types for two mappings. '''

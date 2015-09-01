@@ -17,7 +17,7 @@ from data_pipeline.helper.gene_interactions import GeneInteractions
 from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
-# Get an instance of a logger
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,6 +162,15 @@ class PostProcess(object):
                                     kwargs['section']['index_type'])
 
     @classmethod
+    def ensmart_homolog_parse(cls, *args, **kwargs):
+        ''' Parse result from ensembl mart. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as ensmart_f:
+            Gene.ensmart_homolog_parse(ensmart_f, kwargs['section']['attrs'],
+                                       kwargs['section']['index'],
+                                       kwargs['section']['index_type'])
+
+    @classmethod
     def gene2ensembl_parse(cls, *args, **kwargs):
         ''' Parse gene2ensembl file from NCBI. '''
         download_file = cls._get_download_file(*args, **kwargs)
@@ -192,6 +201,12 @@ class PostProcess(object):
         Gene.gene_history_mapping(kwargs['section']['index'], kwargs['section']['index_type'])
         with gzip.open(download_file, 'rt') as gene_his_f:
             Gene.gene_history_parse(gene_his_f, kwargs['section']['index'], kwargs['section']['index_type'])
+
+    @classmethod
+    def gene_mgi_parse(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as gene_mgi_f:
+            Gene.gene_mgi_parse(gene_mgi_f, kwargs['section']['index'])
 
     ''' Marker downloads '''
     @classmethod
@@ -348,9 +363,8 @@ class IniParser(object):
         ''' Loop over all sections in the config file and process. '''
         success = False
         for section_name in config.sections():
-            if sections is not None and section_name not in sections:
+            if sections is not None and not self._is_section_match(section_name, sections):
                 continue
-
             section_dir_name = self._inherit_section(section_name, config)
             dir_path = os.path.join(base_dir_path, self.__class__.__name__.upper(), section_dir_name)
             success = self.process_section(section_name, section_dir_name, base_dir_path,
@@ -361,6 +375,14 @@ class IniParser(object):
     def process_section(self, section_name, section_dir_name, base_dir_path,
                         dir_path='.', section=None, stage=None):
         raise NotImplementedError("Inheriting class should implement this  method")
+
+    def _is_section_match(self, name, sections):
+        ''' Check if a section name marched the comma separated list of sections. '''
+        arr = sections.split(',')
+        for s in arr:
+            if s.strip() == name:
+                return True
+        return False
 
     def _inherit_section(self, section_name, config):
         ''' Add in parameters from another config section when a double colon

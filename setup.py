@@ -23,6 +23,7 @@ setup(
                                     'tests/data/DOWNLOAD/DBSNP/*gz',
                                     'tests/data/DOWNLOAD/RSMERGEARCH/*gz',
                                     'tests/data/DOWNLOAD/DISEASE/*txt',
+                                    'tests/data/DOWNLOAD/ENSMART_HOMOLOG/*out',
                                     'tests/*.ini'], },
     include_package_data=True,
     zip_safe=False,

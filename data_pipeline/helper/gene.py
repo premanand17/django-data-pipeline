@@ -6,6 +6,7 @@ from elastic.search import ElasticQuery, Search
 from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
+from data_pipeline.helper.exceptions import PipelineError
 import json
 
 logger = logging.getLogger(__name__)
@@ -35,17 +36,29 @@ class Gene(object):
              .add_property("strand", "string") \
              .add_property("description", "string") \
              .add_property("biotype", "string") \
-             .add_property("dbxrefs", "object") \
              .add_property("pmids", "string") \
              .add_property("suggest", "completion",
                            index_analyzer="full_name", search_analyzer="full_name")
+
+        dbxref_props = cls._get_nested_prop("dbxrefs", "ensembl")
+        ortholog_props = MappingProperties("orthologs")
+        ortholog_props.add_properties(cls._get_nested_prop("mmusculus", "ensembl"))
+        ortholog_props.add_properties(cls._get_nested_prop("rnorvegicus", "ensembl"))
+        dbxref_props.add_properties(ortholog_props)
+        props.add_properties(dbxref_props)
 
         ''' create index and add mapping '''
         load = Loader()
         options = {"indexName": idx, "shards": 5}
         if not test_mode:
-            load.mapping(props, 'gene', analyzer=Loader.KEYWORD_ANALYZER, **options)
+            load.mapping(props, idx_type, analyzer=Loader.KEYWORD_ANALYZER, **options)
         return props
+
+    @classmethod
+    def _get_nested_prop(cls, nested_name, prop_name):
+        org_props = MappingProperties(nested_name)
+        org_props.add_property(prop_name, "string", index="not_analyzed")
+        return org_props
 
     @classmethod
     def gene_history_mapping(cls, idx, idx_type, test_mode=False):
@@ -198,6 +211,47 @@ class Gene(object):
             gene['dbxrefs'].update({db: dbxref})
 
     @classmethod
+    def ensmart_homolog_parse(cls, ensmart_f, attrs, idx, idx_type):
+        ''' Add homolog information. '''
+        genes = {}
+        homologs = [a.strip().replace('_homolog_ensembl_gene', '') for a in attrs.split(',')
+                    if a.strip() != 'ensembl_gene_id']
+        for ensmart in ensmart_f:
+            parts = ensmart.split('\t')
+            ens_id = parts[0]
+            if len(parts) > len(homologs)+1:
+                logger.warn('IGNORE ORTHOLOGS '+ens_id+' :: '+ensmart)
+                continue
+            dbxrefs = {}
+            for i in range(len(parts)):
+                if parts[i].strip() != '':
+                    dbxrefs[homologs[i-1]] = {"ensembl": parts[i].strip()}
+            if len(dbxrefs) > 0:
+                genes[ens_id] = dbxrefs
+
+        '''  search for the entrez ids '''
+        query = ElasticQuery(Query.ids(list(genes.keys())))
+        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
+        chunk_size = 450
+        for i in range(0, len(docs), chunk_size):
+            docs_chunk = docs[i:i+chunk_size]
+            json_data = ''
+            for doc in docs_chunk:
+                ens_id = doc._meta['_id']
+                if 'dbxrefs' in doc.__dict__:
+                    dbxrefs = getattr(doc, 'dbxrefs')
+                else:
+                    dbxrefs = {}
+                dbxrefs['orthologs'] = genes[ens_id]
+                idx_type = doc.type()
+                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                       "_index": idx, "_retry_on_conflict": 3}}
+                json_data += json.dumps(doc_data) + '\n'
+                json_data += json.dumps({'doc': {'dbxrefs': dbxrefs}}) + '\n'
+            if json_data != '':
+                Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
     def gene_info_parse(cls, gene_infos, idx):
         ''' Parse gene_info file from NCBI and add info to gene index. '''
 
@@ -264,6 +318,41 @@ class Gene(object):
                     json_data = ''
         if line_num > 0:
             Loader().bulk_load(idx, idx_type, json_data)
+
+    @classmethod
+    def gene_mgi_parse(cls, gene_pubs, idx):
+        ''' Parse Ensembl and MGI data from JAX. '''
+        orthogenes_mgi = {}
+        for gene_mgi in gene_pubs:
+            parts = gene_mgi.split('\t')
+            if 'MGI:' not in parts[0]:
+                raise PipelineError('MGI not found '+parts[0])
+            if 'ENSMUSG' not in parts[5]:
+                raise PipelineError('ENSMUSG not found '+parts[5])
+            orthogenes_mgi[parts[5]] = parts[0].replace('MGI:', '')
+
+        orthogene_keys = list(orthogenes_mgi.keys())
+        chunk_size = 450
+        for i in range(0, len(orthogene_keys), chunk_size):
+            chunk_gene_keys = orthogene_keys[i:i+chunk_size]
+            json_data = ''
+            query = ElasticQuery.filtered(Query.match_all(),
+                                          TermsFilter.get_terms_filter("dbxrefs.orthologs.mmusculus.ensembl",
+                                                                       chunk_gene_keys))
+            docs = Search(query, idx=idx, size=chunk_size).search().docs
+            for doc in docs:
+                ens_id = doc.doc_id()
+                idx_type = doc.type()
+                mm = getattr(doc, 'dbxrefs')['orthologs']['mmusculus']
+                mm['MGI'] = orthogenes_mgi[mm['ensembl']]
+                dbxrefs = {"dbxrefs": {'orthologs': {"mmusculus": mm}}}
+                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                       "_index": idx, "_retry_on_conflict": 3}}
+                json_data += json.dumps(doc_data) + '\n'
+                json_data += json.dumps({'doc': dbxrefs}) + '\n'
+
+            if json_data != '':
+                Loader().bulk_load(idx, idx_type, json_data)
 
     @classmethod
     def _update_gene(cls, genes, idx):
