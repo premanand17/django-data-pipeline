@@ -13,8 +13,8 @@ setup(
     version='0.0.1',
     packages=find_packages(),
     package_data={'data_pipeline': ['tests/data/DOWNLOAD/INTACT/*zip',
-    				    'tests/data/DOWNLOAD/BIOPLEX/*tsv',
-				    'tests/data/DOWNLOAD/MSIGDB/*gmt',
+                                    'tests/data/DOWNLOAD/BIOPLEX/*tsv',
+                                    'tests/data/DOWNLOAD/MSIGDB/*gmt',
                                     'tests/data/DOWNLOAD/GENE_HISTORY/*gz',
                                     'tests/data/DOWNLOAD/ENSEMBL_GENE_GTF/*gz',
                                     'tests/data/DOWNLOAD/GENE2ENSEMBL/*gz',
@@ -24,6 +24,7 @@ setup(
                                     'tests/data/DOWNLOAD/RSMERGEARCH/*gz',
                                     'tests/data/DOWNLOAD/DISEASE/*txt',
                                     'tests/data/DOWNLOAD/ENSMART_HOMOLOG/*out',
+                                    'tests/data/DOWNLOAD/ENSEMBL2MGI/*.rpt'
                                     'tests/*.ini'], },
     include_package_data=True,
     zip_safe=False,
