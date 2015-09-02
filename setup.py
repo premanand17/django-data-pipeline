@@ -24,7 +24,7 @@ setup(
                                     'tests/data/DOWNLOAD/RSMERGEARCH/*gz',
                                     'tests/data/DOWNLOAD/DISEASE/*txt',
                                     'tests/data/DOWNLOAD/ENSMART_HOMOLOG/*out',
-                                    'tests/data/DOWNLOAD/ENSEMBL2MGI/*.rpt'
+                                    'tests/data/DOWNLOAD/ENSEMBL2MGI/*.rpt',
                                     'tests/*.ini'], },
     include_package_data=True,
     zip_safe=False,
