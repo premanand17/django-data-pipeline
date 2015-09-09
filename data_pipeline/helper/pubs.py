@@ -55,10 +55,14 @@ class Pubs():
             for i in range(0, len(pmids), chunk_size):
                 chunk = pmids[i:i+chunk_size]
                 url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi' \
-                      "?db=pubmed&retmode=xml&id=%s" % \
+                      "?db=pubmed&tool=dil_publication_pipeline&email=tjc29@cimr.cam.ac.uk&retmode=xml&id=%s" % \
                       ",".join([str(item) for item in chunk])
 
                 r = requests.get(url, timeout=25)
+                if r.status_code != 200:
+                    msg = "Status code:: "+str(r.status_code)+" URL:: "+url
+                    logger.error(msg)
+                    raise PublicationDownloadError(msg)
                 tree = ET.fromstring(r.content)
                 pubmeds = tree.findall("PubmedArticle") + tree.findall("PubmedBookArticle")
                 for pubmed in pubmeds:
@@ -92,7 +96,7 @@ class Pubs():
             f.write('\n]}')
         logger.debug("No. publications downloaded "+str(count))
         if count != len(pmids):
-            msg = "No. publications does not match the number of requested PMIDs ="+str(len(pmids))
+            msg = "No. publications "+str(count)+" does not match the number of requested PMIDs ="+str(len(pmids))
             logger.error(msg)
             raise PublicationDownloadError(msg)
 
