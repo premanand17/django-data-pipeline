@@ -1,5 +1,9 @@
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader, JSONLoader
+from elastic.query import TermsFilter, Query
+from elastic.search import ElasticQuery, Search
+from elastic.elastic_settings import ElasticSettings
+import sys
 
 
 class ImmunoChip(object):
@@ -17,6 +21,7 @@ class ImmunoChip(object):
              .add_property("is_par", "string") \
              .add_property("name", "string", analyzer="full_name") \
              .add_property("internal_id", "integer") \
+             .add_property("strand", "string", index="not_analyzed") \
              .add_property("suggest", "completion",
                            index_analyzer="full_name", search_analyzer="full_name")
 
@@ -28,12 +33,12 @@ class ImmunoChip(object):
         return props
 
     @classmethod
-    def immunochip(cls, ic_f, idx_name, idx_type):
+    def immunochip_mysql_2_idx(cls, ic_f, idx_name, idx_type):
         ''' Parse and load data for immunochip markers. '''
-
         docs = []
         chunk_size = 450
         count = 0
+        current_marker_ids = []
         for ic in ic_f:
             parts = ic.strip().split('\t')
             if parts[0] == 'ilmn_id':
@@ -50,6 +55,8 @@ class ImmunoChip(object):
                 if m_id != '\\N' and m_id != 'AMBIG':
                     current_marker_id = m_id
                     syns.add(m_id)
+                else:
+                    current_marker_id = ''
             if current_marker_id in syns:
                 syns.remove(current_marker_id)
 
@@ -59,6 +66,7 @@ class ImmunoChip(object):
                 suggests.extend(list(syns))
             if current_marker_id != '':
                 doc['id'] = current_marker_id
+                current_marker_ids.append(current_marker_id)
             doc['build_info'] = [{'build': '36', 'position': parts[8], 'seqid': parts[9]},
                                  {'build': '37', 'position': parts[10], 'seqid': parts[11]},
                                  {'build': '38', 'position': parts[12], 'seqid': parts[13]}]
@@ -66,6 +74,8 @@ class ImmunoChip(object):
                 doc['is_par'] = parts[14]
             doc['internal_id'] = int(parts[15])
             doc['name'] = parts[16]
+            if parts[17] != '\\N':
+                doc['strand'] = parts[17]
             suggests.append(doc['name'])
 
             doc['suggest'] = {}
@@ -73,6 +83,20 @@ class ImmunoChip(object):
             docs.append(doc)
 
             if count > chunk_size:
+#                 terms_filter = TermsFilter.get_terms_filter("id", current_marker_ids)
+#                 query = ElasticQuery.filtered(Query.match_all(), terms_filter)
+#                 elastic = Search(query, idx=ElasticSettings.idx('MARKER', 'immunochip'), size=chunk_size)
+#                 marker_docs = elastic.search().docs
+# 
+#                 for m_id in current_marker_ids:
+#                     found = False
+#                     for m_doc in marker_docs:
+#                         if getattr(m_doc, 'id') == m_id:
+#                             found = True
+#                     if not found:
+#                         print(m_id)
+#                 sys.exit()
+
                 JSONLoader().load(docs, idx_name, idx_type)
                 docs = []
                 count = 0

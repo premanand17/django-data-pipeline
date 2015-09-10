@@ -229,14 +229,14 @@ class PostProcess(object):
         call_command('index_search', indexType=idx_type, indexSNPMerge=download_file, indexName=idx)
 
     @classmethod
-    def immunochip(cls, *args, **kwargs):
+    def immunochip_mysql_2_idx(cls, *args, **kwargs):
         ''' Parse and load IC markers. '''
         download_file = kwargs['section']['location']
         idx = kwargs['section']['index']
         idx_type = kwargs['section']['index_type']
         ImmunoChip.ic_mapping(idx, idx_type)
         with open(download_file, 'rt') as ic_f:
-            ImmunoChip.immunochip(ic_f, idx, idx_type)
+            ImmunoChip.immunochip_mysql_2_idx(ic_f, idx, idx_type)
 
     ''' Publication methods '''
     @classmethod
