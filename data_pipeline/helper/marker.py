@@ -62,7 +62,7 @@ class ImmunoChip(object):
             syns = set()
             syns.add(parts[0])
             current_marker_id = ''
-            for m_id in parts[3:7]:
+            for m_id in parts[3:8]:
                 if m_id != '\\N' and m_id != 'AMBIG':
                     current_marker_id = m_id
                     syns.add(m_id)
@@ -83,7 +83,11 @@ class ImmunoChip(object):
                                  {'build': '38', 'position': parts[12], 'seqid': parts[13]}]
             if parts[14] != '\\N':
                 doc['is_par'] = parts[14]  # pseudoautosomal
-            doc['internal_id'] = int(parts[15])
+
+            if parts[18] != '\\N':         # use marker_mart_141 if present
+                doc['internal_id'] = int(parts[18])
+            else:
+                doc['internal_id'] = int(parts[15])
             doc['name'] = parts[16]
             if parts[17] != '\\N':
                 doc['strand'] = parts[17]
@@ -124,14 +128,28 @@ class ImmunoChip(object):
         ''' check rshigh if the marker id has merged, see docs:
         www.ncbi.nlm.nih.gov/projects/SNP/snp_db_table_description.cgi?t=RsMergeArch
         '''
-        #  TODO
+        terms_filter = TermsFilter.get_terms_filter("rshigh", not_current_marker_ids)
+        query = ElasticQuery.filtered(Query.match_all(), terms_filter, sources=['rscurrent', 'rshigh', "build_id"])
+        elastic = Search(query, idx=ElasticSettings.idx('MARKER', idx_type='HISTORY'), size=len(current_marker_ids))
+        history_docs = elastic.search().docs
+        rshistory = {}
+        for h_doc in history_docs:
+            if getattr(h_doc, 'build_id') < 142:
+                logger.error("MARKER MERGE BUILD < 142: " + getattr(h_doc, 'rshigh') + ' build: ' +
+                             str(getattr(h_doc, 'build_id')))
+            if getattr(h_doc, 'rscurrent') != 'rs':
+                rshistory[getattr(h_doc, 'rshigh')] = getattr(h_doc, 'rscurrent')
 
         for m_id in not_current_marker_ids:
-            # no longer a current marker move to synonym
+            # no longer a current marker id so move to synonym
             for n_doc in new_docs:
                 if 'id' in n_doc and n_doc['id'] == m_id:
                     logger.debug("Marker no longer current: "+m_id)
-                    del n_doc['id']
+                    if m_id in rshistory:
+                        n_doc['id'] = rshistory[m_id]
+                        n_doc['internal_id'] = int(rshistory[m_id].replace('rs', ''))
+                    else:
+                        del n_doc['id']
                     if m_id not in n_doc['synonyms']:
                         n_doc['synonyms'] = m_id
 
