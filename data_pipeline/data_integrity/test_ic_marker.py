@@ -19,44 +19,38 @@ class ImmunoChipMarkerDataTest(TestCase):
             self.assertTrue('hits' in resp_json, 'scan and scroll hits')
             self.assertGreaterEqual(len(resp_json['hits']['hits']), 1)
             docs = [Document(hit) for hit in resp_json['hits']['hits']]
-            for doc in docs:
-                doc_internal_id = getattr(doc, "internal_id")
+            for doc1 in docs:
+                doc_internal_id = getattr(doc1, "internal_id")
                 if doc_internal_id in internal_id:
-                    position1 = self._get_highest_build_pos(doc)
+                    pos1 = self._get_highest_build(doc1)
                     for doc2 in internal_id[doc_internal_id]:
-                        position2 = self._get_highest_build_pos(doc2)
-                        if position2 != position1:
+                        pos2 = self._get_highest_build(doc2)
+                        if pos2['position'] != pos1['position']:
+                            msg = ("ID "+str(doc_internal_id)+" has different positions:\t" +
+                                   str(getattr(doc1, "name"))+": "+pos1['position']+" ("+doc1.doc_id()+")\t" +
+                                   str(getattr(doc2, "name"))+": "+pos2['position']+" ("+doc2.doc_id()+")\t")
                             try:
-                                terms_filter = TermsFilter.get_terms_filter("id", getattr(doc, "synonyms"))
-                                query = ElasticQuery.filtered(Query.match_all(), terms_filter)
+                                terms_filter = TermsFilter.get_terms_filter("start", [pos1['position'],
+                                                                                      pos2['position']])
+                                query = ElasticQuery.filtered(Query.term("seqid", pos1['seqid']), terms_filter)
                                 elastic = Search(query, idx=ElasticSettings.idx('MARKER', 'MARKER'))
-                                docs = elastic.search().docs
-                                if len(docs) == 1:
-                                    rs_current_id = getattr(docs[0], "id")
-                                    rs_position = getattr(docs[0], "start")
-
-                                    logger.error("ID "+str(doc_internal_id)+" has different positions:\t" +
-                                                 str(getattr(doc, "name"))+": "+position1+"\t" +
-                                                 str(getattr(doc2, "name"))+": "+position2+"\t" +
-                                                 rs_current_id+": "+str(rs_position))
-                                else:
-                                    logger.error("ID "+str(doc_internal_id)+" has different positions:\t" +
-                                                 str(getattr(doc, "name"))+": "+position1+"\t" +
-                                                 str(getattr(doc2, "name"))+": "+position2)
+                                docs_by_pos = elastic.search().docs
+                                for d in docs_by_pos:
+                                    msg += getattr(d, "id")+": "+str(getattr(d, "start"))+"\t"
+                                logger.error(msg)
                             except KeyError:
-                                pass
-
-                    internal_id[doc_internal_id].append(doc)
+                                logger.error(msg)
+                    internal_id[doc_internal_id].append(doc1)
                 else:
-                    internal_id[doc_internal_id] = [doc]
+                    internal_id[doc_internal_id] = [doc1]
 
         ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
         print("LEN = "+str(len(internal_id)))
 
-    def _get_highest_build_pos(self, doc):
+    def _get_highest_build(self, doc):
         builds = getattr(doc, "build_info")
         high_build = {'build': '0'}
         for build in builds:
             if int(high_build['build']) < int(build['build']):
                 high_build = build
-        return high_build['position']
+        return high_build
