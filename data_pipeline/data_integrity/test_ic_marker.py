@@ -47,6 +47,34 @@ class ImmunoChipMarkerDataTest(TestCase):
         ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
         print("LEN = "+str(len(internal_id)))
 
+    def test_positions2(self):
+        ''' Test the rs position matches dbsnp position. '''
+        rsids = {}
+
+        def check_hits(resp_json):
+            docs = [Document(hit) for hit in resp_json['hits']['hits']]
+            for doc in docs:
+                rsid = getattr(doc, "id")
+                if rsid is not None:
+                    rsids[rsid] = doc
+            rsids_keys = list(rsids.keys())
+            terms_filter = TermsFilter.get_terms_filter("id", rsids_keys)
+            query = ElasticQuery.filtered(Query.match_all(), terms_filter)
+            elastic = Search(query, idx=ElasticSettings.idx('MARKER', 'MARKER'), size=len(rsids_keys))
+            docs_by_rsid = elastic.search().docs
+            for doc in docs_by_rsid:
+                rsid = getattr(doc, "id")
+                pos1 = getattr(doc, "start")
+                ic_doc = rsids[rsid]
+                pos2 = self._get_highest_build(ic_doc)['position']
+                if int(pos1) != int(pos2):
+                    is_par = getattr(ic_doc, 'is_par')
+                    allele_a = getattr(ic_doc, 'allele_a')
+                    if is_par is None and not (allele_a == 'D' or allele_a == 'I'):
+                        print(getattr(ic_doc, 'name')+' '+str(pos1)+" "+str(pos2))
+
+        ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
+
     def test_internal_ids(self):
         ''' Test that the internal id matches the rs id. '''
         def check_hits(resp_json):
