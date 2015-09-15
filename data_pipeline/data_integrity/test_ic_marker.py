@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class ImmunoChipMarkerDataTest(TestCase):
     '''IC marker test '''
 
-    def test_internal_ids(self):
+    def test_positions(self):
         internal_id = {}
 
         def check_hits(resp_json):
@@ -46,6 +46,20 @@ class ImmunoChipMarkerDataTest(TestCase):
 
         ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
         print("LEN = "+str(len(internal_id)))
+
+    def test_internal_ids(self):
+        ''' Test that the internal id matches the rs id. '''
+        def check_hits(resp_json):
+            docs = [Document(hit) for hit in resp_json['hits']['hits']]
+            for doc1 in docs:
+                internal_id = getattr(doc1, "internal_id")
+                rsid = getattr(doc1, "id")
+                if (internal_id is None and rsid < 0) or rsid is None:
+                    continue
+                rsid = rsid.replace('rs', '')
+                self.assertEqual(int(internal_id), int(rsid), str(rsid)+" ::: "+str(internal_id))
+
+        ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
 
     def _get_highest_build(self, doc):
         builds = getattr(doc, "build_info")
