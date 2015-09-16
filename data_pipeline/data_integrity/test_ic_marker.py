@@ -1,4 +1,4 @@
-''' Data integrity tests. '''
+''' Data integrity tests for Immunochip markers. '''
 from django.test import TestCase
 from elastic.elastic_settings import ElasticSettings
 from elastic.search import ScanAndScroll, ElasticQuery, Search
@@ -6,7 +6,6 @@ from elastic.result import Document
 import logging
 from elastic.query import Query, TermsFilter
 import requests
-import sys
 
 logger = logging.getLogger(__name__)
 
