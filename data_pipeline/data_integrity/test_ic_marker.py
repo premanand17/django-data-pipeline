@@ -5,12 +5,24 @@ from elastic.search import ScanAndScroll, ElasticQuery, Search
 from elastic.result import Document
 import logging
 from elastic.query import Query, TermsFilter
+import requests
+import sys
 
 logger = logging.getLogger(__name__)
 
 
 class ImmunoChipMarkerDataTest(TestCase):
     '''IC marker test '''
+    neg_internal_id = 0
+
+    def _rs_exists(self, rsid):
+        url = "http://www.ncbi.nlm.nih.gov/projects/SNP/snp_ref.cgi?rs=" + rsid.replace("rs", "")
+        r = requests.get(url)
+        if r.status_code != 200:
+            return False
+        if 'invalid snp_id' in r.text:
+            return False
+        return True
 
     def test_positions(self):
         internal_id = {}
@@ -26,7 +38,7 @@ class ImmunoChipMarkerDataTest(TestCase):
                     for doc2 in internal_id[doc_internal_id]:
                         pos2 = self._get_highest_build(doc2)
                         if pos2['position'] != pos1['position']:
-                            msg = ("ID "+str(doc_internal_id)+" has different positions:\t" +
+                            msg = ("DIFFERENT POSITIONS ID: "+str(doc_internal_id)+":\t" +
                                    str(getattr(doc1, "name"))+": "+pos1['position']+" ("+doc1.doc_id()+")\t" +
                                    str(getattr(doc2, "name"))+": "+pos2['position']+" ("+doc2.doc_id()+")\t")
                             try:
@@ -35,8 +47,18 @@ class ImmunoChipMarkerDataTest(TestCase):
                                 query = ElasticQuery.filtered(Query.term("seqid", pos1['seqid']), terms_filter)
                                 elastic = Search(query, idx=ElasticSettings.idx('MARKER', 'MARKER'))
                                 docs_by_pos = elastic.search().docs
+                                found = False
                                 for d in docs_by_pos:
                                     msg += getattr(d, "id")+": "+str(getattr(d, "start"))+"\t"
+                                    if getattr(d, "id") == 'rs'+str(doc_internal_id):
+                                        found = True
+
+                                if not found:
+                                    msg += 'rs'+str(doc_internal_id)
+                                    if self._rs_exists('rs'+str(doc_internal_id)):
+                                        msg += ' EXISTS IN DBSNP\t'
+                                    else:
+                                        msg += ' NOT IN DBSNP\t'
                                 logger.error(msg)
                             except KeyError:
                                 logger.error(msg)
@@ -91,6 +113,18 @@ class ImmunoChipMarkerDataTest(TestCase):
                 self.assertEqual(int(internal_id), int(rsid), str(rsid)+" ::: "+str(internal_id))
 
         ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
+
+    def test_neg_internal_ids(self):
+        ''' Test that the internal id matches the rs id. '''
+        def check_hits(resp_json):
+            docs = [Document(hit) for hit in resp_json['hits']['hits']]
+            for doc1 in docs:
+                internal_id = getattr(doc1, "internal_id")
+                if int(internal_id) < self.neg_internal_id:
+                    self.neg_internal_id = int(internal_id)
+
+        ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
+        print(self.neg_internal_id)
 
     def _get_highest_build(self, doc):
         builds = getattr(doc, "build_info")
