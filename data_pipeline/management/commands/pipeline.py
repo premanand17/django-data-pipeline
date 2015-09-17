@@ -30,6 +30,9 @@ class Command(BaseCommand):
     Marker:
     ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections DBSNP --steps download load
     ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections RSMERGEARCH --steps download load
+
+    ./manage.py pipeline --dir tmp --ini download.ini  --sections IMMUNOCHIP_MYSQL --steps load
+
     '''
     help = "Download data file(s)"
 
