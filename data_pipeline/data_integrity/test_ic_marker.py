@@ -4,7 +4,7 @@ from elastic.elastic_settings import ElasticSettings
 from elastic.search import ScanAndScroll, ElasticQuery, Search
 from elastic.result import Document
 import logging
-from elastic.query import Query, TermsFilter
+from elastic.query import Query, TermsFilter, Filter
 import requests
 
 logger = logging.getLogger(__name__)
@@ -109,8 +109,27 @@ class ImmunoChipMarkerDataTest(TestCase):
                     is_par = getattr(ic_doc, 'is_par')
                     allele_a = getattr(ic_doc, 'allele_a')
                     if is_par is None and not (allele_a == 'D' or allele_a == 'I'):
-                        logger.error("CHECK IC POSITIONS: "+getattr(ic_doc, 'name') +
-                                     ' '+str(pos2)+" "+rsid+' '+str(pos1))
+                        msg = ("CHECK IC/DBSNP POSITIONS:: "+getattr(ic_doc, 'name') +
+                               ' '+str(pos2)+" "+rsid+' '+str(pos1))
+#                                ' ('+ic_doc.doc_id()+' '+json.dumps(getattr(ic_doc, 'build_info'))+')'
+
+                        query = ElasticQuery.filtered(Query.term("seqid", getattr(doc, 'seqid')),
+                                                      Filter(Query.term("start", pos2)))
+                        elastic = Search(query, idx=ElasticSettings.idx('MARKER', 'MARKER'))
+                        docs_by_pos = elastic.search().docs
+                        if len(docs_by_pos) > 0:
+                            for d in docs_by_pos:
+                                msg += " ("+getattr(d, "id")+":"+str(getattr(d, "start"))+")"
+
+                        query = ElasticQuery.filtered(Query.match_all(), Filter(Query.term("rslow", rsid)))
+                        elastic = Search(query, idx=ElasticSettings.idx('MARKER', 'HISTORY'))
+                        docs_by_pos = elastic.search().docs
+                        if len(docs_by_pos) > 0:
+                            for d in docs_by_pos:
+                                msg += " (rshigh:"+str(getattr(d, "rshigh")) + \
+                                       " build_id:"+str(getattr(d, "build_id"))+")"
+
+                        logger.error(msg)
 
         ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
 
