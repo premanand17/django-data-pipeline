@@ -14,7 +14,20 @@ class ImmunoChipMarkerDataTest(TestCase):
     '''IC marker test '''
     neg_internal_id = 0
 
+    def get_neg_internal_ids(self):
+        ''' Utility to get the largest negative internal ID. '''
+        def check_hits(resp_json):
+            docs = [Document(hit) for hit in resp_json['hits']['hits']]
+            for doc1 in docs:
+                internal_id = int(getattr(doc1, "internal_id"))
+                if internal_id < self.neg_internal_id:
+                    self.neg_internal_id = internal_id
+
+        ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
+        logger.info(self.neg_internal_id)
+
     def _rs_exists(self, rsid):
+        ''' Check if the rsid exists in dbsnp. '''
         url = "http://www.ncbi.nlm.nih.gov/projects/SNP/snp_ref.cgi?rs=" + rsid.replace("rs", "")
         r = requests.get(url)
         if r.status_code != 200:
@@ -24,6 +37,8 @@ class ImmunoChipMarkerDataTest(TestCase):
         return True
 
     def test_positions(self):
+        ''' Test that where internal ID corresponds to more than one IC
+        marker that their positions are the same. '''
         internal_id = {}
 
         def check_hits(resp_json):
@@ -86,9 +101,9 @@ class ImmunoChipMarkerDataTest(TestCase):
                 info = getattr(doc, "info")
                 if 'VC=SNV' not in info:
                     continue
+                ic_doc = rsids[rsid]
                 rsid = getattr(doc, "id")
                 pos1 = getattr(doc, "start")
-                ic_doc = rsids[rsid]
                 pos2 = self._get_highest_build(ic_doc)['position']
                 if abs(int(pos1) - int(pos2)) > 1:
                     is_par = getattr(ic_doc, 'is_par')
@@ -112,18 +127,6 @@ class ImmunoChipMarkerDataTest(TestCase):
                 self.assertEqual(int(internal_id), int(rsid), str(rsid)+" ::: "+str(internal_id))
 
         ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
-
-    def test_neg_internal_ids(self):
-        ''' Test that the internal id matches the rs id. '''
-        def check_hits(resp_json):
-            docs = [Document(hit) for hit in resp_json['hits']['hits']]
-            for doc1 in docs:
-                internal_id = getattr(doc1, "internal_id")
-                if int(internal_id) < self.neg_internal_id:
-                    self.neg_internal_id = int(internal_id)
-
-        ScanAndScroll.scan_and_scroll(ElasticSettings.idx('MARKER', idx_type='IC'), call_fun=check_hits)
-        print(self.neg_internal_id)
 
     def _get_highest_build(self, doc):
         builds = getattr(doc, "build_info")
