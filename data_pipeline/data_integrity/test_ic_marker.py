@@ -101,8 +101,8 @@ class ImmunoChipMarkerDataTest(TestCase):
                 info = getattr(doc, "info")
                 if 'VC=SNV' not in info:
                     continue
-                ic_doc = rsids[rsid]
                 rsid = getattr(doc, "id")
+                ic_doc = rsids[rsid]
                 pos1 = getattr(doc, "start")
                 pos2 = self._get_highest_build(ic_doc)['position']
                 if abs(int(pos1) - int(pos2)) > 1:
