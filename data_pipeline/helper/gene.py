@@ -47,6 +47,10 @@ class Gene(object):
         dbxref_props.add_properties(ortholog_props)
         props.add_properties(dbxref_props)
 
+        tags = MappingProperties("tags")
+        tags.add_property("weight", "integer", index="not_analyzed")
+        props.add_properties(tags)
+
         ''' create index and add mapping '''
         load = Loader()
         options = {"indexName": idx, "shards": 5}
