@@ -37,8 +37,7 @@ class Gene(object):
              .add_property("description", "string") \
              .add_property("biotype", "string") \
              .add_property("pmids", "string") \
-             .add_property("suggest", "completion",
-                           index_analyzer="full_name", search_analyzer="full_name")
+             .add_property("suggest", "completion", analyzer="full_name")
 
         dbxref_props = cls._get_nested_prop("dbxrefs", "ensembl")
         ortholog_props = MappingProperties("orthologs")
