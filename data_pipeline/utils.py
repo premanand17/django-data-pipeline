@@ -13,12 +13,12 @@ import re
 import gzip
 import logging
 from data_pipeline.helper.gene import Gene
-import zipfile
-import csv
-import sys
-from elastic.management.loaders.mapping import MappingProperties
-import datetime
-# Get an instance of a logger
+from data_pipeline.helper.gene_interactions import GeneInteractions
+from data_pipeline.helper.gene_pathways import GenePathways
+from builtins import classmethod
+from django.core.management import call_command
+from data_pipeline.helper.marker import ImmunoChip
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,6 +52,9 @@ class Monitor(object):
 
 
 def process_wrapper(*args, **kwargs):
+    ''' Wrapper to call a defined function in the ini file. Depending on the
+    stage (from the class L{Download}, L{Stage} or L{Load}) look for the ini
+    tag for that section. The tag defines the function name to be called. '''
     section = kwargs['section']
     ini_tag = None
     if kwargs['stage'] == 'Download':
@@ -87,9 +90,14 @@ def pre_process(func):
 
 
 class PostProcess(object):
+    ''' Used by L{post_process} and L{pre_process} decorators to be able to call
+    functions before or after the decorated function e.g. when processing
+    sections in the configuration (ini) files.
+    '''
 
     @classmethod
     def _get_stage_file(cls, *args, **kwargs):
+        ''' Return the location of the staged data file. '''
         section = kwargs['section']
         section_dir_name = args[2]
         base_dir_path = args[3]
@@ -116,13 +124,24 @@ class PostProcess(object):
 
     @classmethod
     def _get_download_file(cls, *args, **kwargs):
+        ''' Return the location of the downloaded data file. '''
         section = kwargs['section']
         section_dir_name = args[2]
         base_dir_path = args[3]
         if 'output' in section:
             return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['output'])
         elif 'files' in section:
-            return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
+            download_files = []
+            ff = section['files'].split(',')
+            if len(ff) > 1:
+                for f in ff:
+                    download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
+                                                 f.strip())
+                    download_files.append(download_file)
+                    print(download_files)
+                return download_files
+            else:
+                return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
 
     ''' Pipeline methods '''
     @classmethod
@@ -140,14 +159,25 @@ class PostProcess(object):
         ''' Parse result from ensembl mart. '''
         download_file = cls._get_download_file(*args, **kwargs)
         with open(download_file, 'rt') as ensmart_f:
-            Gene.ensmart_gene_parse(ensmart_f, kwargs['section']['index'])
+            Gene.ensmart_gene_parse(ensmart_f, kwargs['section']['index'],
+                                    kwargs['section']['index_type'])
+
+    @classmethod
+    def ensmart_homolog_parse(cls, *args, **kwargs):
+        ''' Parse result from ensembl mart. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as ensmart_f:
+            Gene.ensmart_homolog_parse(ensmart_f, kwargs['section']['attrs'],
+                                       kwargs['section']['index'],
+                                       kwargs['section']['index_type'])
 
     @classmethod
     def gene2ensembl_parse(cls, *args, **kwargs):
         ''' Parse gene2ensembl file from NCBI. '''
         download_file = cls._get_download_file(*args, **kwargs)
         with gzip.open(download_file, 'rt') as gene2ens_f:
-            Gene.gene2ensembl_parse(gene2ens_f, kwargs['section']['index'])
+            Gene.gene2ensembl_parse(gene2ens_f, kwargs['section']['index'],
+                                    kwargs['section']['index_type'])
 
     @classmethod
     def gene_info_parse(cls, *args, **kwargs):
@@ -165,6 +195,49 @@ class PostProcess(object):
         with gzip.open(download_file, 'rt') as gene_pub_f:
             Gene.gene_pub_parse(gene_pub_f, kwargs['section']['index'])
 
+    @classmethod
+    def gene_history_parse(cls, *args, **kwargs):
+        ''' Parse gene_history file from NCBI. '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        Gene.gene_history_mapping(kwargs['section']['index'], kwargs['section']['index_type'])
+        with gzip.open(download_file, 'rt') as gene_his_f:
+            Gene.gene_history_parse(gene_his_f, kwargs['section']['index'], kwargs['section']['index_type'])
+
+    @classmethod
+    def gene_mgi_parse(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        with open(download_file, 'rt') as gene_mgi_f:
+            Gene.gene_mgi_parse(gene_mgi_f, kwargs['section']['index'])
+
+    ''' Marker downloads '''
+    @classmethod
+    def dbsnp_marker(cls, *args, **kwargs):
+        ''' Parse dbSNP VCF and use elastic loader to index
+        (L{elastic.management.loaders.marker.MarkerManager}). '''
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        call_command('index_search', indexType=idx_type, indexSNP=download_file, indexName=idx)
+
+    @classmethod
+    def dbsnp_merge(cls, *args, **kwargs):
+        ''' Parse the history (rs_merge) from dbSNP and use the
+        elastic loader to index (L{elastic.management.loaders.marker.RsMerge}).'''
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        call_command('index_search', indexType=idx_type, indexSNPMerge=download_file, indexName=idx)
+
+    @classmethod
+    def immunochip_mysql_2_idx(cls, *args, **kwargs):
+        ''' Parse and load IC markers. '''
+        download_file = kwargs['section']['location']
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        ImmunoChip.ic_mapping(idx, idx_type)
+        with open(download_file, 'rt') as ic_f:
+            ImmunoChip.immunochip_mysql_2_idx(ic_f, idx, idx_type)
+
     ''' Publication methods '''
     @classmethod
     def get_new_pmids(cls, pmids, idx, disease_code=None):
@@ -176,14 +249,14 @@ class PostProcess(object):
 
         for i in range(0, len(pmids), chunk_size):
             pmids_slice = pmids[i:i+chunk_size]
-            terms_filter = TermsFilter.get_terms_filter("PMID", pmids_slice)
-            query = ElasticQuery.filtered(Query.match_all(), terms_filter, sources=['PMID', 'tags'])
+            terms_filter = TermsFilter.get_terms_filter("pmid", pmids_slice)
+            query = ElasticQuery.filtered(Query.match_all(), terms_filter, sources=['pmid', 'tags'])
 
             docs = Search(query, idx=idx, size=chunk_size).search().docs
             json_data = ''
 
             for doc in docs:
-                pmids_found_add(getattr(doc, 'PMID'))
+                pmids_found_add(getattr(doc, 'pmid'))
                 if disease_code is not None:
                     tags = getattr(doc, 'tags')
                     if 'disease' in tags:
@@ -247,10 +320,18 @@ class PostProcess(object):
         stage_output_file = cls._get_stage_output_file(*args, **kwargs)
         download_file = cls._get_download_file(*args, **kwargs)
         section = kwargs['section']
-        Gene.gene_interaction_parse(download_file, stage_output_file, section)
+        GeneInteractions.gene_interaction_parse(download_file, stage_output_file, section)
+
+    @classmethod
+    def gene_pathway_parse(cls, *args, **kwargs):
+        stage_output_file = cls._get_stage_output_file(*args, **kwargs)
+        download_files = cls._get_download_file(*args, **kwargs)
+        section = kwargs['section']
+        GenePathways.gene_pathway_parse(download_files, stage_output_file, section)
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
+        ''' Parse XML from eutils. '''
         section_name = args[1]
         section = kwargs['section']
         stage_file = cls._get_stage_file(*args, **kwargs)
@@ -293,9 +374,8 @@ class IniParser(object):
         ''' Loop over all sections in the config file and process. '''
         success = False
         for section_name in config.sections():
-            if sections is not None and section_name not in sections:
+            if sections is not None and not self._is_section_match(section_name, sections):
                 continue
-
             section_dir_name = self._inherit_section(section_name, config)
             dir_path = os.path.join(base_dir_path, self.__class__.__name__.upper(), section_dir_name)
             success = self.process_section(section_name, section_dir_name, base_dir_path,
@@ -306,6 +386,14 @@ class IniParser(object):
     def process_section(self, section_name, section_dir_name, base_dir_path,
                         dir_path='.', section=None, stage=None):
         raise NotImplementedError("Inheriting class should implement this  method")
+
+    def _is_section_match(self, name, sections):
+        ''' Check if a section name marched the comma separated list of sections. '''
+        arr = sections.split(',')
+        for s in arr:
+            if s.strip() == name:
+                return True
+        return False
 
     def _inherit_section(self, section_name, config):
         ''' Add in parameters from another config section when a double colon

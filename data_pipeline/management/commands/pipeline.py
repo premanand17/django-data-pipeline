@@ -3,10 +3,45 @@ from django.core.management.base import BaseCommand, CommandError
 from data_pipeline.download import Download
 from data_pipeline.stage import Stage
 from data_pipeline.load import IndexLoad
+import logging
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Download data file(s)."
+    ''' Command line for downloading and loading data.
+
+    Gene:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL_GENE --steps download stage load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE2ENSEMBL --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_GENE --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_INFO --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_PUBS --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_HOMOLOG --steps download load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL2MGI --steps download load
+
+    Gene Interactions:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections INTACT --steps download stage load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections BIOPLEX --steps download stage load
+
+    Gene Pathways/Genesets:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections MSIGDB --steps download stage load
+
+    Update gene suggester weighting:
+    python criteria_suggester.py gene
+
+    Gene History:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_HISTORY --steps download load
+
+    Marker:
+    ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections DBSNP --steps download load
+    ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections RSMERGEARCH --steps download load
+
+    ./manage.py pipeline --dir tmp --ini download.ini  --sections IMMUNOCHIP_MYSQL --steps load
+
+    '''
+    help = "Download data file(s)"
 
     def add_arguments(self, parser):
         parser.add_argument('--url',
@@ -28,8 +63,7 @@ class Command(BaseCommand):
                             nargs='+', required=True)
 
     def handle(self, *args, **options):
-        print(options)
-
+        logger.debug(options)
         if 'download' in options['steps']:
             if options['ini']:
                 if not options['dir']:

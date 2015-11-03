@@ -21,23 +21,33 @@ class IndexLoad(IniParser):
                         dir_path='.', section=None, stage='load'):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
+        stage_files = []
         if 'output' in section:
             stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
                                       section['output'] + '.json')
+            stage_files.append(stage_file)
         elif 'files' in section:
             stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
                                       section['files'] + '.json')
-            print(stage_file)
+            ff = section['files'].split(',')
+            for f in ff:
+                stage_file = os.path.join(base_dir_path, 'STAGE', section_dir_name,
+                                          f.strip() + '.json')
+                stage_files.append(stage_file)
         else:
             return
-
-        if not os.path.exists(stage_file):
-            logger.error('File does not exist: '+stage_file)
-            return
-        logger.debug('Loading: '+stage_file + ' into ' + section['index'])
 
         if 'index_type' in section:
             idx_type = section['index_type']
         else:
             idx_type = 'auto'
-        call_command('index_search', indexType=idx_type, indexJson=stage_file, indexName=section['index'])
+
+        for stage_file in stage_files:
+
+            if not os.path.exists(stage_file):
+                logger.error('File does not exist: '+stage_file)
+                return
+
+            logger.debug('Loading: '+stage_file + ' into ' + section['index'])
+            print('Loading: '+stage_file + ' into ' + section['index'] + '  '+idx_type)
+            call_command('index_search', indexType=idx_type, indexJson=stage_file, indexName=section['index'])

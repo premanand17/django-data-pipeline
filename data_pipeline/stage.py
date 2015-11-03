@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class Stage(IniParser):
-    ''' Load into Elastic '''
+    ''' Used to stage data in preparation for loading. '''
 
     def stage(self, ini_file, dir_path, sections=None):
         ''' Download data defined in the ini file. '''
@@ -25,8 +25,14 @@ class Stage(IniParser):
             download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
                                          section['output'])
         elif 'files' in section:
-            download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
-                                         section['files'])
+            ff = section['files'].split(',')
+            for f in ff:
+                download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
+                                             f.strip())
+                if not os.path.exists(download_file):
+                    logger.error('File does not exist: '+download_file)
+                    return False
+            return True
         else:
             return False
 

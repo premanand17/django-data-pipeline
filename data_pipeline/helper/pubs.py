@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class Pubs():
+    ''' Publication class to define functions for building publication index. '''
 
     DUPLICATE_PMIDS = ['22543779']
 
@@ -33,14 +34,16 @@ class Pubs():
         count = 0
         mapping = {
             "_id": {"type": "integer"},
-            "PMID": {"type": "integer"},
+            "pmid": {"type": "integer"},
             "tags": {"type": "object", "index": "not_analyzed"},
             "journal": {"type": "string"},
             "title": {"type": "string"},
             "date": {"type": "date"},
             "authors": {"type": "object"},
-            "abstract": {"type": "string"}
+            "abstract": {"type": "string"},
+            "suggest": {"type": "completion"}
                    }
+
         mapping_keys = mapping.keys()
         start = time.time()
 
@@ -52,10 +55,14 @@ class Pubs():
             for i in range(0, len(pmids), chunk_size):
                 chunk = pmids[i:i+chunk_size]
                 url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi' \
-                      "?db=pubmed&retmode=xml&id=%s" % \
+                      "?db=pubmed&tool=dil_publication_pipeline&email=tjc29@cimr.cam.ac.uk&retmode=xml&id=%s" % \
                       ",".join([str(item) for item in chunk])
 
                 r = requests.get(url, timeout=25)
+                if r.status_code != 200:
+                    msg = "Status code:: "+str(r.status_code)+" URL:: "+url
+                    logger.error(msg)
+                    raise PublicationDownloadError(msg)
                 tree = ET.fromstring(r.content)
                 pubmeds = tree.findall("PubmedArticle") + tree.findall("PubmedBookArticle")
                 for pubmed in pubmeds:
@@ -76,8 +83,9 @@ class Pubs():
 
                     keys_not_found = [k for k in mapping_keys if k not in pub_obj]
                     if len(keys_not_found) > 0:
-                        logger.warn("PMID: "+pub_obj['PMID']+' not found: '+str(keys_not_found))
+                        logger.warn("PMID: "+pub_obj['pmid']+' not found: '+str(keys_not_found))
                     f.write(json.dumps(pub_obj))
+#                     print(pub_obj['pmid'])
                     count += 1
 
                 time_taken = time.time() - start
@@ -88,14 +96,14 @@ class Pubs():
             f.write('\n]}')
         logger.debug("No. publications downloaded "+str(count))
         if count != len(pmids):
-            msg = "No. publications does not match the number of requested PMIDs ="+str(len(pmids))
+            msg = "No. publications "+str(count)+" does not match the number of requested PMIDs ="+str(len(pmids))
             logger.error(msg)
             raise PublicationDownloadError(msg)
 
     @classmethod
     def _parse_pubmed_record(cls, pub):
         pmid = pub.find('PMID').text
-        pub_obj = {'PMID': pmid, '_id': pmid}
+        pub_obj = {'pmid': pmid, '_id': pmid}
         article = pub.find('Article')
         if article is not None:
             pub_obj['title'] = article.find('ArticleTitle').text
@@ -149,19 +157,26 @@ class Pubs():
     def get_authors(cls, pub_obj, authors, pmid):
         ''' Add the author list to the publication object. '''
         authors_arr = []
+        lastnames = []
         try:
             for author in authors:
                 try:
-                    author_obj = {'LastName': author.find('LastName').text,
-                                  'ForeName': author.find('ForeName').text}
+                    lastname = author.find('LastName').text.title()
+                    forename = author.find('ForeName').text.title()
+                    lastnames.append(lastname)
+                    if not lastname.startswith(forename+' '):
+                        lastname = forename + ' ' + lastname
+                    author_obj = {'name': lastname}
                 except AttributeError:
                     if author.find('LastName') is None:
                         continue
-                    author_obj = {'LastName': author.find('LastName').text}
+                    author_obj = {'name': author.find('LastName').text}
                 if author.find('Initials') is not None:
-                    author_obj.update({'Initials': author.find('Initials').text})
+                    author_obj.update({'initials': author.find('Initials').text})
                 authors_arr.append(author_obj)
             pub_obj['authors'] = authors_arr
+            if len(lastnames) > 0:
+                pub_obj['suggest'] = {"input": lastnames}
         except TypeError:
             logger.warn('No authors found for PMID:'+pmid)
 
@@ -237,4 +252,4 @@ class Pubs():
 
             pub_obj['date'] = date
         else:
-            logger.warn("Date not found for PMID:"+pub_obj["PMID"])
+            logger.warn("Date not found for PMID:"+pub_obj["pmid"])
