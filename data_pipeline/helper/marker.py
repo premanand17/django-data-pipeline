@@ -33,8 +33,7 @@ class ImmunoChip(object):
              .add_property("name", "string", analyzer="full_name") \
              .add_property("internal_id", "integer") \
              .add_property("strand", "string", index="not_analyzed") \
-             .add_property("suggest", "completion",
-                           index_analyzer="full_name", search_analyzer="full_name")
+             .add_property("suggest", "completion", analyzer="full_name")
 
         ''' create index and add mapping '''
         load = Loader()
