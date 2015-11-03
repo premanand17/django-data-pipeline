@@ -37,8 +37,7 @@ class Gene(object):
              .add_property("description", "string") \
              .add_property("biotype", "string") \
              .add_property("pmids", "string") \
-             .add_property("suggest", "completion",
-                           index_analyzer="full_name", search_analyzer="full_name")
+             .add_property("suggest", "completion", analyzer="full_name")
 
         dbxref_props = cls._get_nested_prop("dbxrefs", "ensembl")
         ortholog_props = MappingProperties("orthologs")
@@ -46,6 +45,10 @@ class Gene(object):
         ortholog_props.add_properties(cls._get_nested_prop("rnorvegicus", "ensembl"))
         dbxref_props.add_properties(ortholog_props)
         props.add_properties(dbxref_props)
+
+        tags = MappingProperties("tags")
+        tags.add_property("weight", "integer", index="not_analyzed")
+        props.add_properties(tags)
 
         ''' create index and add mapping '''
         load = Loader()

@@ -17,6 +17,7 @@ from data_pipeline.helper.gene_interactions import GeneInteractions
 from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
+from data_pipeline.helper.marker import ImmunoChip
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,16 @@ class PostProcess(object):
         idx = kwargs['section']['index']
         idx_type = kwargs['section']['index_type']
         call_command('index_search', indexType=idx_type, indexSNPMerge=download_file, indexName=idx)
+
+    @classmethod
+    def immunochip_mysql_2_idx(cls, *args, **kwargs):
+        ''' Parse and load IC markers. '''
+        download_file = kwargs['section']['location']
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        ImmunoChip.ic_mapping(idx, idx_type)
+        with open(download_file, 'rt') as ic_f:
+            ImmunoChip.immunochip_mysql_2_idx(ic_f, idx, idx_type)
 
     ''' Publication methods '''
     @classmethod

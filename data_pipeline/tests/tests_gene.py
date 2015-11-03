@@ -38,13 +38,13 @@ class GeneInteractionStagingTest(TestCase):
         self.ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
+        call_command('pipeline', '--steps', 'stage', sections='INTACT',
+                     dir=self.test_data_dir, ini=self.ini_file, stdout=self.out)
         logging.debug(self.test_data_dir)
 
     def test_intact(self):
         ''' Test intact staging. '''
         logging.debug("Test intact staging")
-        call_command('pipeline', '--steps', 'stage', sections='INTACT',
-                     dir=self.test_data_dir, ini=self.ini_file, stdout=self.out)
 
         self.assertTrue(os.path.exists(self.test_data_dir + '/STAGE/INTACT'))
         self.assertTrue(os.path.isfile(self.test_data_dir + '/STAGE/INTACT/intact.zip.out'))
@@ -83,11 +83,6 @@ class GeneInteractionStagingTest(TestCase):
             {"interactor": "ENSG00000185043", "pubmed": "10366599"}
             ]
 
-        # assertDictEqual should return True even if the keys-value pairs are in different order
-        expected_interactors2 = {'ENSG00000171552': '9437013', 'ENSG00000196924': '11001931'}
-        expected_interactors3 = {'ENSG00000196924': '11001931', 'ENSG00000171552': '9437013'}
-        self.assertDictEqual(expected_interactors2, expected_interactors3, "dict with interactor order changed equal")
-
         parent = r'"_parent": "ENSG00000143801"'
         matched_json_str = None
         with open(self.test_data_dir + '/STAGE/INTACT/intact.zip.json', 'r') as f:
@@ -107,6 +102,7 @@ class GeneInteractionStagingTest(TestCase):
 
         expected_dict = dict((i['interactor'], i['pubmed']) for i in expected_interactors)
         staged_dict = dict((i['interactor'], i['pubmed']) for i in stage_interactors)
+        # assertDictEqual should return True even if the keys-value pairs are in different order
         self.assertDictEqual(expected_dict, staged_dict, "Staging OK")
 
     def test_bioplex(self):
