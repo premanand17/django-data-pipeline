@@ -314,7 +314,7 @@ class GeneInteractions(Gene):
         if interactorA in gene_interactors:
             existing_listA = gene_interactors[interactorA]
 
-            if interactorB not in existing_listA:
+            if not any(interactorB in d for d in existing_listA):
                 interactorB_evidence = {interactorB: evidence_id}
                 existing_listA.append(interactorB_evidence)
                 gene_interactors[interactorA] = existing_listA
@@ -325,7 +325,7 @@ class GeneInteractions(Gene):
         if interactorB in gene_interactors:
             existing_listB = gene_interactors[interactorB]
 
-            if interactorA not in existing_listB:
+            if not any(interactorA in d for d in existing_listB):
                 interactorA_evidence = {interactorA: evidence_id}
                 existing_listB.append(interactorA_evidence)
                 gene_interactors[interactorB] = existing_listB
