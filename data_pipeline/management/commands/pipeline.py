@@ -21,6 +21,13 @@ class Command(BaseCommand):
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSMART_HOMOLOG --steps download load
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL2MGI --steps download load
 
+    Gene Interactions:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections INTACT --steps download stage load
+    ./manage.py pipeline --dir tmp --ini download.ini --sections BIOPLEX --steps download stage load
+
+    Gene Pathways/Genesets:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections MSIGDB --steps download stage load
+
     Update gene suggester weighting:
     python criteria_suggester.py gene
 
