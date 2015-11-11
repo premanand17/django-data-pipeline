@@ -411,9 +411,11 @@ class Gene(object):
                                       TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets))
         docs = Search(query, idx=section['index'], size=1000000).search().docs
         ensembl_ids = []
-        for doc in docs:
-            ens_id = doc._meta['_id']
-            ensembl_ids.append(ens_id)
+        # if found return ensembl IDs in the same order as in the gene_sets
+        for gene_id in replaced_gene_sets:
+            for doc in docs:
+                if gene_id == getattr(doc, 'dbxrefs')['entrez']:
+                    ensembl_ids.append(doc._meta['_id'])
 
         if log_conversion:
             if log_output_file_handler is not None:

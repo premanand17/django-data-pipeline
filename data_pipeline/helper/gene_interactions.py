@@ -243,12 +243,12 @@ class GeneInteractions(Gene):
     def _load_interaction_mappings(cls, section):
         '''Load the mappings for interactions index type'''
         interaction_mapping = MappingProperties("interactions", "gene")
-        interaction_mapping.add_property("interactors", "object", index="not_analyzed")
+        interaction_mapping.add_property("interactors", "object")
         interaction_mapping.add_property("interaction_source", "string")
         load = Loader()
         idx = section['index']
         options = {"indexName": idx, "shards": 1}
-        status = load.mapping(interaction_mapping, "interactions", **options)
+        status = load.mapping(interaction_mapping, "interactions", analyzer=Loader.KEYWORD_ANALYZER, **options)
         return status
 
     @classmethod
