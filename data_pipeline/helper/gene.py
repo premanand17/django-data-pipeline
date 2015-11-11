@@ -408,7 +408,8 @@ class Gene(object):
         replaced_gene_sets = cls._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
 
         query = ElasticQuery.filtered(Query.match_all(),
-                                      TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets))
+                                      TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
+                                      sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
         docs = Search(query, idx=section['index'], size=1000000).search().docs
         ensembl_ids = []
         # if found return ensembl IDs in the same order as in the gene_sets
@@ -426,7 +427,8 @@ class Gene(object):
     @classmethod
     def _check_gene_history(cls, gene_sets, section):
         query = ElasticQuery.filtered(Query.match_all(),
-                                      TermsFilter.get_terms_filter("discontinued_geneid", gene_sets))
+                                      TermsFilter.get_terms_filter("discontinued_geneid", gene_sets),
+                                      sources=['geneid', 'discontinued_geneid'])
         docs = Search(query, idx=section['index'], idx_type=section['index_type_history'], size=1000000).search().docs
 
         newgene_ids = {}
