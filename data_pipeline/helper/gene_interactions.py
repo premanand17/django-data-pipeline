@@ -5,10 +5,12 @@ import csv
 import re
 import zipfile
 import os
+import json
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
-import json
 from data_pipeline.helper.gene import Gene
+from elastic.search import ElasticQuery, Search
+from elastic.query import TermsFilter, BoolQuery
 
 logger = logging.getLogger(__name__)
 
@@ -73,34 +75,41 @@ class GeneInteractions(Gene):
         header_line = 'interactorA' + '\t' + 'interactorB\n'
         stage_output_file_handler.write(header_line)
 
-        log_target_file = stage_output_file + ".log"
-        log_target_file_handler = open(log_target_file, mode='w', encoding='utf-8')
+        gene_sets = []
         with open(download_file, encoding='utf-8') as csvfile:
-                    reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
-                    for row in reader:
-                        gene_sets = []
-                        interactor_a = row['GeneA']
-                        interactor_b = row['GeneB']
-                        gene_sets.append(interactor_a)
-                        gene_sets.append(interactor_b)
+            reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+            for row in reader:
+                gene_sets.extend([row['GeneA'], row['GeneB']])
+        csvfile.close()
 
-                        ensembl_ids = super()._convert_entrezid2ensembl(gene_sets, section,
-                                                                        log_target_file_handler, True)
-                        if(len(ensembl_ids) == 2):
-                            line = ensembl_ids[0] + '\t' + ensembl_ids[1] + '\n'
-                            stage_output_file_handler.write(line)
-                            mapped_counter += 1
-                        else:
-                            line = interactor_a + '\t' + interactor_b + '\n'
-                            unmapped_counter += 1
-                            unmapped_ids.append(interactor_a)
-                            unmapped_ids.append(interactor_b)
+        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
+        replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
+
+        query = BoolQuery(b_filter=TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets))
+        equery = ElasticQuery(query, sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
+        docs = Search(equery, idx=section['index'], size=len(replaced_gene_sets)).search().docs
+        ens_look_up = {getattr(doc, 'dbxrefs')['entrez']: getattr(doc, 'dbxrefs')['ensembl']
+                       for doc in docs if 'ensembl' in getattr(doc, 'dbxrefs')}
+
+        with open(download_file, encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+            for row in reader:
+                gene_sets = []
+                interactor_a = row['GeneA']
+                interactor_b = row['GeneB']
+                if interactor_a in ens_look_up and interactor_b in ens_look_up:
+                    line = ens_look_up[interactor_a] + '\t' + ens_look_up[interactor_b] + '\n'
+                    stage_output_file_handler.write(line)
+                    mapped_counter += 1
+                else:
+                    line = interactor_a + '\t' + interactor_b + '\n'
+                    unmapped_ids.append(interactor_a)
+                    unmapped_ids.append(interactor_b)
 
         logger.debug("\n".join(unmapped_ids))
         logger.debug("Mapped {}  Unmapped {} " . format(mapped_counter, unmapped_counter))
 
         stage_output_file_handler.close()
-        # log_target_file_handler.close()
         cls._process_interaction_out_file(stage_output_file, section, False)
 
     @classmethod
