@@ -425,6 +425,21 @@ class Gene(object):
         return ensembl_ids
 
     @classmethod
+    def _entrez_ensembl_lookup(cls, gene_sets, section):
+        ''' Get an entrez:ensembl id dictionary. '''
+        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
+        replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
+#         query = BoolQuery(b_filter=TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets))
+#         equery = ElasticQuery(query, sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
+        equery = ElasticQuery.filtered(Query.match_all(),
+                                       TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
+                                       sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
+
+        docs = Search(equery, idx=section['index'], size=len(replaced_gene_sets)).search().docs
+        return {getattr(doc, 'dbxrefs')['entrez']: getattr(doc, 'dbxrefs')['ensembl']
+                for doc in docs if 'ensembl' in getattr(doc, 'dbxrefs')}
+
+    @classmethod
     def _check_gene_history(cls, gene_sets, section):
         query = ElasticQuery.filtered(Query.match_all(),
                                       TermsFilter.get_terms_filter("discontinued_geneid", gene_sets),
