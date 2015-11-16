@@ -81,15 +81,7 @@ class GeneInteractions(Gene):
             for row in reader:
                 gene_sets.extend([row['GeneA'], row['GeneB']])
         csvfile.close()
-
-        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
-        replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
-
-        query = BoolQuery(b_filter=TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets))
-        equery = ElasticQuery(query, sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
-        docs = Search(equery, idx=section['index'], size=len(replaced_gene_sets)).search().docs
-        ens_look_up = {getattr(doc, 'dbxrefs')['entrez']: getattr(doc, 'dbxrefs')['ensembl']
-                       for doc in docs if 'ensembl' in getattr(doc, 'dbxrefs')}
+        ens_look_up = Gene._entrez_ensembl_lookup(gene_sets, section)
 
         with open(download_file, encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
