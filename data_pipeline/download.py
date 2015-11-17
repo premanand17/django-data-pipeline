@@ -83,9 +83,9 @@ class HTTPDownload(object):
     def download(cls, url, dir_path, file_name, append=False, username=None, password=None):
 
         if username is not None:
-            r = requests.get(url, auth=(username, password), stream=True, timeout=10)
+            r = requests.get(url, auth=(username, password), stream=True, timeout=50)
         else:
-            r = requests.get(url, stream=True, timeout=10)
+            r = requests.get(url, stream=True, timeout=50)
 
         if r.status_code != 200:
             logger.error("response "+str(r.status_code)+": "+url)

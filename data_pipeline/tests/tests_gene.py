@@ -25,7 +25,6 @@ def tearDownModule():
     stage_data_dir = test_data_dir + '/STAGE'
     if(os.path.exists(stage_data_dir)):
         shutil.rmtree(stage_data_dir)
-        pass
 
 
 class GeneInteractionStagingTest(TestCase):
@@ -158,7 +157,6 @@ class GenePathwayStagingTest(TestCase):
         self.assertTrue(os.path.isfile(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.kegg.v5.0.entrez.gmt.json'))
         self.assertTrue(os.path.isfile(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.reactome.v5.0.entrez.gmt.json'))
         self.assertTrue(os.path.isfile(self.test_data_dir + '/STAGE/MSIGDB/c5.all.v5.0.entrez.gmt.json'))
-
         self.assertTrue(os.access(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.biocarta.v5.0.entrez.gmt.json', os.R_OK))
 
         pathway = r'"REACTOME_APOPTOTIC_CLEAVAGE_OF_CELLULAR_PROTEINS"'
@@ -174,7 +172,7 @@ class GenePathwayStagingTest(TestCase):
         self.assertEqual(json_data['source'], 'reactome', 'Got reactome as source')
         self.assertEqual(json_data['pathway_name'], 'REACTOME_APOPTOTIC_CLEAVAGE_OF_CELLULAR_PROTEINS',
                          'Got right pathway name')
-        self.assertTrue(len(json_data['gene_sets']) == 38, "Found 38 Genes in gene_sets")
+        self.assertEquals(len(json_data['gene_sets']), 38, "Found 38 Genes in gene_sets")
 
 
 class GeneInteractionProcessTest(TestCase):
@@ -284,22 +282,6 @@ class GeneInteractionProcessTest(TestCase):
 
 
 class GeneConversionTest(TestCase):
-    '''Tests entrez2ensembl conversion functions'''
-    def test__convert_entrezid2ensembl(self):
-
-        config = IniParser().read_ini("tests/test_download.ini")
-        section = config["BIOPLEX"]
-        self.assertIsNotNone(section, "Section is not none")
-
-        gene_sets = ['26191']
-        ensembl_ids = Gene._convert_entrezid2ensembl(gene_sets, section)
-        self.assertTrue(len(ensembl_ids) == 1, "Got back one id")
-        self.assertEqual(ensembl_ids[0], "ENSG00000134242", "Got back the right ensembl id for 26191")
-
-        gene_sets = ['26191', '339457']
-        ensembl_ids = Gene._convert_entrezid2ensembl(gene_sets, section)
-        self.assertTrue(len(ensembl_ids) == 2, "Got back 2 ensembl ids")
-        # self.assertEqual(ensembl_ids[0], "ENSG00000134242", "Got back the right ensembl id for 26191")
 
     def test__check_gene_history(self):
         '''Test if the right newid is fetched from genehistory'''

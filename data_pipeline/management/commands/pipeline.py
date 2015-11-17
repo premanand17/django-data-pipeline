@@ -10,7 +10,15 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    ''' Command line for downloading and loading data.
+    ''' Command lines for downloading and loading data. The order for the gene index below is important
+    for the correct mappings to be loaded. Elasticsearch (2.0.0) requires the mapping for interactions
+    to be in place before the parent (gene) objects - so INTACT is loaded before the main gene types.
+
+    Gene History:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_HISTORY --steps download load
+
+    Gene Interactions:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections INTACT --steps download stage load
 
     Gene:
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL_GENE --steps download stage load
@@ -22,7 +30,6 @@ class Command(BaseCommand):
     ./manage.py pipeline --dir tmp --ini download.ini --sections ENSEMBL2MGI --steps download load
 
     Gene Interactions:
-    ./manage.py pipeline --dir tmp --ini download.ini --sections INTACT --steps download stage load
     ./manage.py pipeline --dir tmp --ini download.ini --sections BIOPLEX --steps download stage load
 
     Gene Pathways/Genesets:
@@ -31,8 +38,6 @@ class Command(BaseCommand):
     Update gene suggester weighting:
     python criteria_suggester.py gene
 
-    Gene History:
-    ./manage.py pipeline --dir tmp --ini download.ini --sections GENE_HISTORY --steps download load
 
     Marker:
     ./manage.py pipeline --dir /dbSNP/human/144/ --ini download.ini --sections DBSNP --steps download load
