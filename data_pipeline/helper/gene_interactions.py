@@ -70,10 +70,8 @@ class GeneInteractions(Gene):
         '''
         stage_output_file_handler = open(stage_output_file, 'w')
         mapped_counter = 0
-        unmapped_counter = 0
         unmapped_ids = []
-        header_line = 'interactorA' + '\t' + 'interactorB\n'
-        stage_output_file_handler.write(header_line)
+        stage_output_file_handler.write('interactorA' + '\t' + 'interactorB\n')
 
         gene_sets = []
         with open(download_file, encoding='utf-8') as csvfile:
@@ -86,7 +84,6 @@ class GeneInteractions(Gene):
         with open(download_file, encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
             for row in reader:
-                gene_sets = []
                 interactor_a = row['GeneA']
                 interactor_b = row['GeneB']
                 if interactor_a in ens_look_up and interactor_b in ens_look_up:
@@ -99,7 +96,7 @@ class GeneInteractions(Gene):
                     unmapped_ids.append(interactor_b)
 
         logger.debug("\n".join(unmapped_ids))
-        logger.debug("Mapped {}  Unmapped {} " . format(mapped_counter, unmapped_counter))
+        logger.debug("Mapped {}  Unmapped {} " . format(mapped_counter, len(unmapped_ids)))
 
         stage_output_file_handler.close()
         cls._process_interaction_out_file(stage_output_file, section, False)
