@@ -59,21 +59,10 @@ class GenePathways(Gene):
         2068    2071    25885    284119    2965    2966    2967    2968    4331
 
         The entrez ids are converted to ensembl ids and logs are written to track the conversion rates (LESS/MORE/EQUAL)
-
         '''
-        pathway_name = None
-        pathway_url = None
-        gene_sets = None
-
-        convert2ensembl = True
-
         json_target_file_path = stage_output_file.replace(".out", ".json")
-
         json_target_file = open(json_target_file_path, mode='w', encoding='utf-8')
         json_target_file.write('{"docs":[\n')
-
-        log_target_file = stage_output_file + ".log"
-        log_target_file_handler = open(log_target_file, mode='w', encoding='utf-8')
 
         count = 0
         tmp_row_count_file = open(download_file, encoding='utf-8')
@@ -81,34 +70,38 @@ class GenePathways(Gene):
         logger.debug('Number of lines in the file ' + str(row_count))
 
         load_mapping = True
+
+        gene_sets = []
         with open(download_file, encoding='utf-8') as csvfile:
-                    reader = csv.reader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+            reader = csv.reader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+            for row in reader:
+                gene_sets.extend(row[2:])
+        csvfile.close()
+        ens_look_up = Gene._entrez_ensembl_lookup(gene_sets, section)
 
-                    for row in reader:
-                        path_object = dict()
-                        pathway_name = row[0]
-                        pathway_url = row[1]
-                        gene_sets = row[2:]
+        with open(download_file, encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
 
-                        converted_genesets = 0
-                        if convert2ensembl:
-                            converted_genesets = super()._convert_entrezid2ensembl(gene_sets, section,
-                                                                                   log_target_file_handler, True)
-                            gene_sets = converted_genesets
+            for row in reader:
+                path_object = dict()
+                pathway_name = row[0]
+                pathway_url = row[1]
+                gene_sets = row[2:]
 
-                        path_object["pathway_name"] = pathway_name
-                        path_object["pathway_url"] = pathway_url
-                        path_object["gene_sets"] = gene_sets
-                        path_object["source"] = source
-                        path_object["is_public"] = is_public
-                        json_target_file.write(json.dumps(path_object))
-                        count += 1
-                        if row_count == count:
-                            json_target_file.write('\n')
-                        else:
-                            json_target_file.write(',\n')
+                converted_genesets = [ens_look_up[entrez] for entrez in gene_sets if entrez in ens_look_up]
+                path_object["pathway_name"] = pathway_name
+                path_object["pathway_url"] = pathway_url
+                path_object["gene_sets"] = converted_genesets
+                path_object["source"] = source
+                path_object["is_public"] = is_public
+                json_target_file.write(json.dumps(path_object))
+                count += 1
+                if row_count == count:
+                    json_target_file.write('\n')
+                else:
+                    json_target_file.write(',\n')
 
-                    json_target_file.write('\n]}')
+            json_target_file.write('\n]}')
 
         logger.debug("No. genes to load "+str(count))
         logger.debug("Json written to " + json_target_file_path)
