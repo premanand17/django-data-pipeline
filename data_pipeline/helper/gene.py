@@ -398,50 +398,34 @@ class Gene(object):
         gi['dbxrefs'] = arr
 
     @classmethod
-    def _convert_entrezid2ensembl(cls, gene_sets, section, log_output_file_handler=None, log_conversion=True):
-        '''Converts given set of entrez ids to ensembl ids by querying the gene index dbxrefs'''
+    def _entrez_ensembl_lookup(cls, gene_sets, section):
+        ''' Get an entrez:ensembl id dictionary. '''
+        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
+        replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
+        equery = ElasticQuery.filtered(Query.match_all(),
+                                       TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
+                                       sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
 
-        # first check in gene_history
-        (newgene_ids, discontinued_ids) = cls._check_gene_history(gene_sets, section)
-
-        # replace all old ids with new ids
-        replaced_gene_sets = cls._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
-
-        query = ElasticQuery.filtered(Query.match_all(),
-                                      TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
-                                      sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
-        docs = Search(query, idx=section['index'], size=1000000).search().docs
-        ensembl_ids = []
-        # if found return ensembl IDs in the same order as in the gene_sets
-        for gene_id in replaced_gene_sets:
-            for doc in docs:
-                if gene_id == getattr(doc, 'dbxrefs')['entrez']:
-                    ensembl_ids.append(doc._meta['_id'])
-
-        if log_conversion:
-            if log_output_file_handler is not None:
-                cls._log_entrezid2ensembl_coversion(replaced_gene_sets, ensembl_ids, log_output_file_handler)
-
-        return ensembl_ids
+        docs = Search(equery, idx=section['index'], size=len(replaced_gene_sets)).search().docs
+        return {getattr(doc, 'dbxrefs')['entrez']: doc.doc_id() for doc in docs}
 
     @classmethod
     def _check_gene_history(cls, gene_sets, section):
         query = ElasticQuery.filtered(Query.match_all(),
                                       TermsFilter.get_terms_filter("discontinued_geneid", gene_sets),
                                       sources=['geneid', 'discontinued_geneid'])
-        docs = Search(query, idx=section['index'], idx_type=section['index_type_history'], size=1000000).search().docs
+        docs = Search(query, idx=section['index'], idx_type=section['index_type_history'],
+                      size=len(gene_sets)).search().docs
 
         newgene_ids = {}
         discountinued_geneids = []
         for doc in docs:
             geneid = getattr(doc, 'geneid')
             discontinued_geneid = getattr(doc, 'discontinued_geneid')
-
             if geneid is None:
                 discountinued_geneids.append(str(discontinued_geneid))
             else:
                 newgene_ids[str(discontinued_geneid)] = str(geneid)
-
         return (newgene_ids, discountinued_geneids)
 
     @classmethod
@@ -451,31 +435,6 @@ class Gene(object):
         if discontinued_ids:
             for gene_id in discontinued_ids:
                 if gene_id in gene_sets:
-                    print('removed gene id ' + str(gene_id))
+                    logger.debug('removed gene id ' + str(gene_id))
                     replaced_genesets.remove(gene_id)
-
         return replaced_genesets
-
-    @classmethod
-    def _log_entrezid2ensembl_coversion(cls, entrez_genes_in, ensembl_genes_out,  log_output_file_handler):
-        '''Logs the conversion rates between entrez2ensembl and also stores the input entrez ids for later reference'''
-        entrez_genes_count = len(entrez_genes_in)
-        ensembl_genes_count = len(ensembl_genes_out)
-        try:
-            less_more = entrez_genes_count/ensembl_genes_count
-        except ZeroDivisionError:
-            less_more = 2
-
-        if less_more > 1:
-            diff = entrez_genes_count - ensembl_genes_count
-            diff_text = "Less("+str(diff) + ")"
-        elif less_more < 1:
-            diff = ensembl_genes_count - entrez_genes_count
-            diff_text = "More("+str(diff) + ")"
-        elif less_more == 1:
-            diff = entrez_genes_count - ensembl_genes_count
-            diff_text = "Equal("+str(diff) + ")"
-
-        log_output_file_handler.write(','.join(entrez_genes_in) + "\t" +
-                                      ','.join(ensembl_genes_out) + "\t" + str(entrez_genes_count) + '/' +
-                                      str(ensembl_genes_count) + "\t" + diff_text + "\n")
