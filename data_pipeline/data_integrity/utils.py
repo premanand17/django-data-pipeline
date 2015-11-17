@@ -3,6 +3,9 @@ import logging
 from elastic.query import Query, ScoreFunction, FunctionScoreQuery
 from elastic.search import ElasticQuery, Search
 import random
+import requests
+import json
+import sys
 logger = logging.getLogger(__name__)
 
 
@@ -44,3 +47,27 @@ class DataIntegrityUtils(object):
                 ids.append(doc.doc_id())
 
         return ids
+
+    @classmethod
+    def get_docs_count(cls, idx, idx_type):
+        '''Get doc counts'''
+        elastic = Search(idx=idx, idx_type=idx_type)
+        return elastic.get_count()['count']
+
+    @classmethod
+    def fetch_from_ensembl(cls, gene_id):
+        '''Lookup ensembl via restful call'''
+        server = "http://rest.ensembl.org"
+        ext = "/lookup/id/" + gene_id + "?content-type=application/json;expand=1;db_type=core;object_type=Gene"
+
+        url = server+ext
+        logger.debug(url)
+
+        response = requests.get(url)
+
+        if not response.ok:
+            response.raise_for_status()
+            sys.exit()
+
+        data = json.loads(response.content.decode('utf-8'))
+        return data
