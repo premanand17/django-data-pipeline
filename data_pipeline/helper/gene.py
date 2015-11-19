@@ -106,6 +106,7 @@ class Gene(object):
                     a = attr.strip().split(" ")
                     if a[0] == 'gene_id':
                         gi['_id'] = a[1][1:-1]
+                        gi['dbxrefs'] = {"ensembl": gi['_id']}
                     elif a[0] == 'gene_biotype':
                         gi['biotype'] = a[1][1:-1]
                     elif a[0] == 'gene_name':
