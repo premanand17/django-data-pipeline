@@ -182,7 +182,7 @@ class GenePathwayStagingTest(TestCase):
         ''' Test msigdb staging. '''
         logging.debug("Test msigdb staging")
         call_command('pipeline', '--steps', 'stage', sections='MSIGDB',
-                     dir=self.test_data_dir, ini=self.ini_file, stdout=self.out)
+                     dir=self.test_data_dir, ini=MY_INI_FILE, stdout=self.out)
 
         self.assertTrue(os.path.exists(self.test_data_dir + '/STAGE/MSIGDB'))
         self.assertTrue(os.path.isfile(self.test_data_dir + '/STAGE/MSIGDB/c2.cp.biocarta.v5.0.entrez.gmt.json'))
