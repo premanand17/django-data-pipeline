@@ -317,7 +317,7 @@ class GeneConversionTest(TestCase):
 
     def test__check_gene_history(self):
         '''Test if the right newid is fetched from genehistory'''
-        config = IniParser().read_ini("tests/test_download.ini")
+        config = IniParser().read_ini(MY_INI_FILE)
         gene_sets = ['56730', '26026', '188', '26191']
 
         (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, config)
@@ -348,7 +348,7 @@ class GenePathwayProcessTest(TestCase):
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
 
-        self.config = IniParser().read_ini("tests/test_download.ini")
+        self.config = IniParser().read_ini(MY_INI_FILE)
         self.section = self.config["MSIGDB"]
         self.assertIsNotNone(self.section, "Section is not none")
 
