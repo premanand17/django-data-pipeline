@@ -140,7 +140,7 @@ class GeneInteractionStagingTest(TestCase):
         ''' Test bioplex staging. '''
         logging.debug("Test bioplex staging")
         call_command('pipeline', '--steps', 'stage', sections='BIOPLEX',
-                     dir=self.test_data_dir, ini=self.ini_file, stdout=self.out)
+                     dir=self.test_data_dir, ini=MY_INI_FILE, stdout=self.out)
 
         self.assertTrue(os.path.exists(self.test_data_dir + '/STAGE/BIOPLEX'))
         self.assertTrue(os.path.isfile(self.test_data_dir + '/STAGE/BIOPLEX/BioPlex_interactionList_v4.tsv.out'))
