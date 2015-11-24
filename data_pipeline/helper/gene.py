@@ -8,6 +8,7 @@ from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 from data_pipeline.helper.exceptions import PipelineError
 import json
+from configparser import SectionProxy
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ class Gene(object):
                     a = attr.strip().split(" ")
                     if a[0] == 'gene_id':
                         gi['_id'] = a[1][1:-1]
+                        gi['dbxrefs'] = {"ensembl": gi['_id']}
                     elif a[0] == 'gene_biotype':
                         gi['biotype'] = a[1][1:-1]
                     elif a[0] == 'gene_name':
@@ -398,9 +400,9 @@ class Gene(object):
         gi['dbxrefs'] = arr
 
     @classmethod
-    def _entrez_ensembl_lookup(cls, gene_sets, section):
+    def _entrez_ensembl_lookup(cls, gene_sets, section, config=None):
         ''' Get an entrez:ensembl id dictionary. '''
-        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
+        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, config)
         replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
         equery = ElasticQuery.filtered(Query.match_all(),
                                        TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
@@ -410,11 +412,24 @@ class Gene(object):
         return {getattr(doc, 'dbxrefs')['entrez']: doc.doc_id() for doc in docs}
 
     @classmethod
-    def _check_gene_history(cls, gene_sets, section):
+    def _ensembl_entrez_lookup(cls, ensembl_gene_sets, section):
+        ''' Get an ensembl:entrez id dictionary. '''
+        equery = ElasticQuery.filtered(Query.match_all(),
+                                       TermsFilter.get_terms_filter("dbxrefs.ensembl", ensembl_gene_sets),
+                                       sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
+
+        docs = Search(equery, idx=section['index'], size=len(ensembl_gene_sets)).search().docs
+        return {doc.doc_id(): getattr(doc, 'dbxrefs')['entrez'] for doc in docs}
+
+    @classmethod
+    def _check_gene_history(cls, gene_sets, config):
+        '''find a way to handle this better'''
+
+        section = config['GENE_HISTORY']
         query = ElasticQuery.filtered(Query.match_all(),
                                       TermsFilter.get_terms_filter("discontinued_geneid", gene_sets),
                                       sources=['geneid', 'discontinued_geneid'])
-        docs = Search(query, idx=section['index'], idx_type=section['index_type_history'],
+        docs = Search(query, idx=section['index'], idx_type=section['index_type'],
                       size=len(gene_sets)).search().docs
 
         newgene_ids = {}

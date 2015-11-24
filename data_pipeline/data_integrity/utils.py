@@ -5,7 +5,7 @@ from elastic.search import ElasticQuery, Search
 import random
 import requests
 import json
-import sys
+from elastic.elastic_settings import ElasticSettings
 logger = logging.getLogger(__name__)
 
 
@@ -65,9 +65,16 @@ class DataIntegrityUtils(object):
 
         response = requests.get(url)
 
-        if not response.ok:
-            response.raise_for_status()
-            sys.exit()
+        if response.ok:
+            data = json.loads(response.content.decode('utf-8'))
+            return data
+        else:
+            return None
 
-        data = json.loads(response.content.decode('utf-8'))
-        return data
+    @classmethod
+    def fetch_from_elastic(cls, idx, idx_type, feature_ids):
+        '''Lookup pydgin elastic'''
+        query = ElasticQuery(Query.ids(feature_ids))
+        elastic = Search(query, idx=ElasticSettings.idx(idx, idx_type=idx_type), size=5)
+        docs = elastic.search().docs
+        return docs

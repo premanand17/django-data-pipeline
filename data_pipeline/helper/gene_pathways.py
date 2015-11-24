@@ -18,12 +18,12 @@ class GenePathways(Gene):
     1. Refer section [MSIGDB] in download.ini for source files
     '''
     @classmethod
-    def gene_pathway_parse(cls, download_files, stage_output_file, section):
+    def gene_pathway_parse(cls, download_files, stage_output_file, section, config=None):
         ''' Function to delegate parsing of gene pathway files based on the file formats eg: gmt - genematrix  '''
-        cls._genematrix(download_files, stage_output_file, section)
+        cls._genematrix(download_files, stage_output_file, section, config)
 
     @classmethod
-    def _genematrix(cls, download_files, stage_output_file, section):
+    def _genematrix(cls, download_files, stage_output_file, section, config=None):
         '''Function to delegate parsing of pathway files based on the source eg: kegg, reactome, go'''
         abs_path_staging_dir = os.path.dirname(stage_output_file)
         source = None
@@ -31,7 +31,7 @@ class GenePathways(Gene):
         for file in download_files:
             stage_output_file = abs_path_staging_dir + '/' + os.path.basename(file) + '.json'
             source = cls._get_pathway_source(file)
-            cls._process_pathway(file, stage_output_file, section, source, is_public)
+            cls._process_pathway(file, stage_output_file, section, source, is_public, config)
 
     @classmethod
     def _get_pathway_source(cls, file):
@@ -50,7 +50,7 @@ class GenePathways(Gene):
         return(source)
 
     @classmethod
-    def _process_pathway(cls, download_file, stage_output_file, section, source, is_public):
+    def _process_pathway(cls, download_file, stage_output_file, section, source, is_public, config=None):
         '''Function to parse the pathway input files eg: kegg, reactome, go
         INPUT file format:
         Pathway name \t Pathyway url \t List of entrez ids
@@ -77,7 +77,7 @@ class GenePathways(Gene):
             for row in reader:
                 gene_sets.extend(row[2:])
         csvfile.close()
-        ens_look_up = Gene._entrez_ensembl_lookup(gene_sets, section)
+        ens_look_up = Gene._entrez_ensembl_lookup(gene_sets, section, config)
 
         with open(download_file, encoding='utf-8') as csvfile:
             reader = csv.reader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)

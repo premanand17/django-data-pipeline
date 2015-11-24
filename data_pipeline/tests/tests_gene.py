@@ -12,19 +12,51 @@ import re
 from data_pipeline.helper.gene import Gene
 from data_pipeline.utils import IniParser
 from data_pipeline.helper.gene_pathways import GenePathways
+from elastic.elastic_settings import ElasticSettings
+import requests
+from elastic.search import Search
 logger = logging.getLogger(__name__)
 
 
+IDX_SUFFIX = ElasticSettings.getattr('TEST')
+MY_INI_FILE = os.path.join(os.path.dirname(__file__), IDX_SUFFIX + '_test_download.ini')
+TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
+
+
+def setUpModule():
+    ''' Change ini config (MY_INI_FILE) to use the test suffix when
+    creating pipeline indices. '''
+    ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
+    if os.path.isfile(MY_INI_FILE):
+        return
+
+    with open(MY_INI_FILE, 'w') as new_file:
+        with open(ini_file) as old_file:
+            for line in old_file:
+                new_file.write(line.replace('auto_tests', IDX_SUFFIX))
+
+    '''load ensembl GTF  and GENE_HISTORY'''
+    INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
+    idx = INI_CONFIG['ENSEMBL_GENE_GTF']['index']
+
+    call_command('pipeline', '--steps', 'load', sections='GENE_HISTORY',
+                 dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+    call_command('pipeline', '--steps', 'stage', 'load', sections='ENSEMBL_GENE_GTF',
+                 dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+    Search.index_refresh(idx)
+    call_command('pipeline', '--steps', 'load', sections='GENE2ENSEMBL',
+                 dir=TEST_DATA_DIR, ini=MY_INI_FILE)
+
+    Search.index_refresh(idx)
+
+
 def tearDownModule():
-    '''This is module level tearDown, will run after all the test are ran in this module
-    Removes the test data dirs
-    '''
-    logging.debug('Module teardown...')
-    app_data_dir = os.path.dirname(data_pipeline.__file__)
-    test_data_dir = app_data_dir + '/tests/data'
-    stage_data_dir = test_data_dir + '/STAGE'
-    if(os.path.exists(stage_data_dir)):
-        shutil.rmtree(stage_data_dir)
+    if os.path.exists(TEST_DATA_DIR + '/STAGE'):
+        shutil.rmtree(TEST_DATA_DIR + '/STAGE')
+    # remove index created
+    INI_CONFIG = IniParser().read_ini(MY_INI_FILE)
+    requests.delete(ElasticSettings.url() + '/' + INI_CONFIG['GENE_HISTORY']['index'])
+    os.remove(MY_INI_FILE)
 
 
 class GeneInteractionStagingTest(TestCase):
@@ -172,7 +204,7 @@ class GenePathwayStagingTest(TestCase):
         self.assertEqual(json_data['source'], 'reactome', 'Got reactome as source')
         self.assertEqual(json_data['pathway_name'], 'REACTOME_APOPTOTIC_CLEAVAGE_OF_CELLULAR_PROTEINS',
                          'Got right pathway name')
-        self.assertEquals(len(json_data['gene_sets']), 38, "Found 38 Genes in gene_sets")
+        self.assertEquals(len(json_data['gene_sets']), 3, "Found 3 Genes in gene_sets")
 
 
 class GeneInteractionProcessTest(TestCase):
@@ -286,13 +318,13 @@ class GeneConversionTest(TestCase):
     def test__check_gene_history(self):
         '''Test if the right newid is fetched from genehistory'''
         config = IniParser().read_ini("tests/test_download.ini")
-        section = config["BIOPLEX"]
-        self.assertIsNotNone(section, "Section is not none")
+        gene_sets = ['56730', '26026', '188', '26191']
 
-        gene_sets = ['339457', '197215', '26191']
-        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, section)
-        self.assertTrue(len(newgene_ids) == 1, "Got back one new id")
-        self.assertIn('339457', newgene_ids, "Got back 339457 in new gene ids")
+        (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, config)
+        self.assertTrue(len(newgene_ids) == 2, "Got back two new ids")
+        self.assertIn('56730', newgene_ids.keys(), "Got back 56730 in new gene ids -key")
+        self.assertIn('84666', newgene_ids.values(), "Got back 84666 in new gene ids -value")
+        self.assertIn('188', discontinued_ids, "Got back 188 in new discontinued_ids")
         self.assertTrue(len(discontinued_ids) == 1, "Got back one discontinued geneid")
 
     def test__replace_oldids_with_newids(self):
