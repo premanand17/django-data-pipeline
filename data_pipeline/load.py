@@ -18,7 +18,7 @@ class IndexLoad(IniParser):
 
     @pre_process
     def process_section(self, section_name, section_dir_name, base_dir_path,
-                        dir_path='.', section=None, stage='load'):
+                        dir_path='.', section=None, stage='load', config=None):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
         stage_files = []

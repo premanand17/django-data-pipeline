@@ -47,15 +47,15 @@ class GeneInteractions(Gene):
     '''
 
     @classmethod
-    def gene_interaction_parse(cls, download_file, stage_output_file, section):
+    def gene_interaction_parse(cls, download_file, stage_output_file, section, config=None):
         '''Function to delegate parsing of gene interaction files based on the file formats eg: psimitab'''
         if str(section._name) == "INTACT":
-            cls._psimitab(download_file, stage_output_file, section)
+            cls._psimitab(download_file, stage_output_file, section, config)
         if str(section._name) == "BIOPLEX":
-            cls._process_bioplex(download_file, stage_output_file, section)
+            cls._process_bioplex(download_file, stage_output_file, section, config)
 
     @classmethod
-    def _process_bioplex(cls, download_file, stage_output_file, section):
+    def _process_bioplex(cls, download_file, stage_output_file, section, config):
         '''Function to process bioplex data files. Interactors are in first two columns, they are converted to
         ensembl ids and stored in temperory.out files
         Input File format:
@@ -79,7 +79,8 @@ class GeneInteractions(Gene):
             for row in reader:
                 gene_sets.extend([row['GeneA'], row['GeneB']])
         csvfile.close()
-        ens_look_up = Gene._entrez_ensembl_lookup(gene_sets, section)
+
+        ens_look_up = Gene._entrez_ensembl_lookup(gene_sets, section, config)
 
         with open(download_file, encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
@@ -102,7 +103,7 @@ class GeneInteractions(Gene):
         cls._process_interaction_out_file(stage_output_file, section, False)
 
     @classmethod
-    def _psimitab(cls, download_file, stage_output_file, section):
+    def _psimitab(cls, download_file, stage_output_file, section, config):
         '''Function to process intact psimitab data files
         Input file is the psimitab file
 

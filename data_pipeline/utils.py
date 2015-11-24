@@ -18,6 +18,7 @@ from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
 from data_pipeline.helper.marker import ImmunoChip
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -320,14 +321,20 @@ class PostProcess(object):
         stage_output_file = cls._get_stage_output_file(*args, **kwargs)
         download_file = cls._get_download_file(*args, **kwargs)
         section = kwargs['section']
-        GeneInteractions.gene_interaction_parse(download_file, stage_output_file, section)
+        config = None
+        if 'config' in kwargs:
+            config = kwargs['config']
+        GeneInteractions.gene_interaction_parse(download_file, stage_output_file, section, config=config)
 
     @classmethod
     def gene_pathway_parse(cls, *args, **kwargs):
         stage_output_file = cls._get_stage_output_file(*args, **kwargs)
         download_files = cls._get_download_file(*args, **kwargs)
         section = kwargs['section']
-        GenePathways.gene_pathway_parse(download_files, stage_output_file, section)
+        config = None
+        if 'config' in kwargs:
+            config = kwargs['config']
+        GenePathways.gene_pathway_parse(download_files, stage_output_file, section, config=config)
 
     @classmethod
     def xmlparse(cls, *args, **kwargs):
@@ -380,11 +387,12 @@ class IniParser(object):
             dir_path = os.path.join(base_dir_path, self.__class__.__name__.upper(), section_dir_name)
             success = self.process_section(section_name, section_dir_name, base_dir_path,
                                            dir_path=dir_path, section=config[section_name],
-                                           stage=self.__class__.__name__)
+                                           stage=self.__class__.__name__, config=config)
         return success
 
     def process_section(self, section_name, section_dir_name, base_dir_path,
-                        dir_path='.', section=None, stage=None):
+                        dir_path='.', section=None, stage=None, config=None):
+        ''' Overridden in stage, load, and download. '''
         raise NotImplementedError("Inheriting class should implement this  method")
 
     def _is_section_match(self, name, sections):

@@ -39,7 +39,7 @@ class Download(IniParser):
 
     @post_process
     def process_section(self, fname, section_dir_name, base_dir_path,
-                        dir_path='.', section=None, stage='download'):
+                        dir_path='.', section=None, stage='download', config=None):
         ''' Overrides L{IniParser.process_section} to process a section
         in the config file '''
         success = False
