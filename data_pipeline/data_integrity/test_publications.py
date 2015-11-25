@@ -15,20 +15,19 @@ logger = logging.getLogger(__name__)
 
 class PublicationTest(TestCase):
     ''' Publication tests. '''
+    TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
+    DISEASES = []
 
-    def test_publication_disease_counts(self):
-        ''' Retrieve the publication list for each disease from NCBI and check
-        they all exist in the publication index.
-        '''
+    @classmethod
+    def setUpClass(cls):
+        ''' Retrieve the publication list for each disease from NCBI. '''
         ini = IniParser()
         config = ini.read_ini('publications.ini')
         res = Search(ElasticQuery(Query.match_all(), sources=['code']), idx=ElasticSettings.idx('DISEASE')).search()
         sections = ''
         for doc in res.docs:
             sections += 'DISEASE::'+getattr(doc, 'code').upper()+','
-        print(sections)
-
-        TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
+        sections = 'DISEASE::T1D,DISEASE::MS,DISEASE::SLE'
 
         for section_name in config.sections():
             if sections is not None and not ini._is_section_match(section_name, sections):
@@ -36,18 +35,44 @@ class PublicationTest(TestCase):
             ini._inherit_section(section_name, config)
             logger.debug(section_name)
             section = config[section_name]
+            disease = section_name.split('::')[1]
+            file_name = 'disease_pub_'+disease+'.tmp'
+            HTTPDownload().download(section['location']+"?"+section['http_params'],
+                                    cls.TEST_DATA_DIR, file_name=file_name)
+            PublicationTest.DISEASES.append(disease)
 
-            file_name = 'disease_pub_'+section_name.split('::')[1]+'.tmp'
-            self.assertTrue(HTTPDownload().download(section['location']+"?"+section['http_params'],
-                                                    TEST_DATA_DIR, file_name=file_name))
+    @classmethod
+    def tearDownClass(cls):
+        ''' Remove disease publication files. '''
+        super(PublicationTest, cls)
+        for disease in cls.DISEASES:
+            file_name = 'disease_pub_'+disease+'.tmp'
+            os.remove(os.path.join(cls.TEST_DATA_DIR, file_name))
 
-            tree = ET.parse(os.path.join(TEST_DATA_DIR, file_name))
+    def test_publication_disease_counts(self):
+        ''' Check all publications exist in the publication index. '''
+        for disease in PublicationTest.DISEASES:
+            file_name = 'disease_pub_'+disease+'.tmp'
+            tree = ET.parse(os.path.join(PublicationTest.TEST_DATA_DIR, file_name))
             idlist = tree.find("IdList")
             ids = list(idlist.iter("Id"))
             pmids = [i.text for i in ids]
-            parts = section_name.rsplit(':', 1)
-            disease_code = parts[1].lower()
+            disease_code = disease.lower()
             res = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(pmids)))),
                          idx=ElasticSettings.idx('PUBLICATION')).get_count()
             self.assertEquals(res['count'], len(pmids), 'Count for '+disease_code)
-            os.remove(os.path.join(TEST_DATA_DIR, file_name))
+
+    def test_publications_disease_tags(self):
+        ''' Check the number of disease publications against the number
+        of tags.disease. '''
+        for disease in PublicationTest.DISEASES:
+            file_name = 'disease_pub_'+disease+'.tmp'
+            tree = ET.parse(os.path.join(PublicationTest.TEST_DATA_DIR, file_name))
+            idlist = tree.find("IdList")
+            ids = list(idlist.iter("Id"))
+            pmids = [i.text for i in ids]
+            disease_code = disease.lower()
+            res = Search(search_query=ElasticQuery(BoolQuery(
+                         b_filter=Filter(Query.term('tags.disease', disease_code)))),
+                         idx=ElasticSettings.idx('PUBLICATION')).get_count()
+            self.assertEquals(res['count'], len(pmids), 'Count for '+disease_code)
