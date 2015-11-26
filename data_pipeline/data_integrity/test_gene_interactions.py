@@ -103,7 +103,6 @@ class GeneInteractionDataTest(TestCase):
             zf = zipfile.ZipFile('/tmp/intact.zip', 'r')
 
             my_regex = re.escape(parent_id)
-            print(my_regex)
             if 'intact.txt' in zf.namelist():
                 target_path = zf.extract(member='intact.txt', path='/tmp')
                 with open(target_path, encoding='utf-8') as csvfile:
