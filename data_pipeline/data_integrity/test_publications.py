@@ -56,9 +56,15 @@ class PublicationTest(TestCase):
         for disease in PublicationTest.DISEASES:
             pmids = self._get_pmids(disease)
             disease_code = disease.lower()
-            res = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(pmids)))),
-                         idx=ElasticSettings.idx('PUBLICATION')).get_count()
-            self.assertEquals(res['count'], len(pmids), 'Count for '+disease_code)
+            elastic = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(pmids)))),
+                             idx=ElasticSettings.idx('PUBLICATION'), size=len(pmids)*2)
+            self.assertEquals(elastic.get_count()['count'], len(pmids), 'Count for '+disease_code)
+
+            # check for differences in pmids
+            docs = elastic.search().docs
+            pmids_in_idx = [getattr(doc, 'pmid') for doc in docs]
+            pmids_diff = list(set(pmids) - set(pmids_in_idx))
+            self.assertEquals(len(pmids_diff), 0)
 
     def test_publications_disease_tags(self):
         ''' Check the number of disease publications against the number of tags.disease and
