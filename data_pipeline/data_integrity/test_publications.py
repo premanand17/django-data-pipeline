@@ -27,8 +27,9 @@ class PublicationTest(TestCase):
         sections = ''
         for doc in res.docs:
             sections += 'DISEASE::'+getattr(doc, 'code').upper()+','
-        sections = 'DISEASE::T1D,DISEASE::MS,DISEASE::SLE'
+        # sections = 'DISEASE::T1D,DISEASE::MS,DISEASE::SLE'
 
+        # download ncbi publication lists for each disease
         for section_name in config.sections():
             if sections is not None and not ini._is_section_match(section_name, sections):
                 continue
@@ -40,6 +41,7 @@ class PublicationTest(TestCase):
             HTTPDownload().download(section['location']+"?"+section['http_params'],
                                     cls.TEST_DATA_DIR, file_name=file_name)
             PublicationTest.DISEASES.append(disease)
+        print()
 
     @classmethod
     def tearDownClass(cls):
@@ -52,27 +54,44 @@ class PublicationTest(TestCase):
     def test_publication_disease_counts(self):
         ''' Check all publications exist in the publication index. '''
         for disease in PublicationTest.DISEASES:
-            file_name = 'disease_pub_'+disease+'.tmp'
-            tree = ET.parse(os.path.join(PublicationTest.TEST_DATA_DIR, file_name))
-            idlist = tree.find("IdList")
-            ids = list(idlist.iter("Id"))
-            pmids = [i.text for i in ids]
+            pmids = self._get_pmids(disease)
             disease_code = disease.lower()
             res = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(pmids)))),
                          idx=ElasticSettings.idx('PUBLICATION')).get_count()
             self.assertEquals(res['count'], len(pmids), 'Count for '+disease_code)
 
     def test_publications_disease_tags(self):
-        ''' Check the number of disease publications against the number
-        of tags.disease. '''
+        ''' Check the number of disease publications against the number of tags.disease and
+        report differences`. '''
+        count = True
+        msg = ''
         for disease in PublicationTest.DISEASES:
-            file_name = 'disease_pub_'+disease+'.tmp'
-            tree = ET.parse(os.path.join(PublicationTest.TEST_DATA_DIR, file_name))
-            idlist = tree.find("IdList")
-            ids = list(idlist.iter("Id"))
-            pmids = [i.text for i in ids]
+            pmids = self._get_pmids(disease)
             disease_code = disease.lower()
-            res = Search(search_query=ElasticQuery(BoolQuery(
-                         b_filter=Filter(Query.term('tags.disease', disease_code)))),
-                         idx=ElasticSettings.idx('PUBLICATION')).get_count()
-            self.assertEquals(res['count'], len(pmids), 'Count for '+disease_code)
+            elastic = Search(search_query=ElasticQuery(BoolQuery(
+                         b_filter=Filter(Query.term('tags.disease', disease_code))), sources=['pmid']),
+                         idx=ElasticSettings.idx('PUBLICATION'), size=len(pmids)*2)
+            res = elastic.get_count()
+            msg += disease_code+'\tINDEX: '+str(res['count'])+'\tNCBI: '+str(len(pmids))
+            if res['count'] != len(pmids):
+                count = False
+                docs = elastic.search().docs
+                pmids_in_idx = [getattr(doc, 'pmid') for doc in docs]
+                pmids_diff1 = [pmid for pmid in pmids_in_idx if pmid not in pmids]
+                pmids_diff2 = [pmid for pmid in pmids if pmid not in pmids_in_idx]
+                if len(pmids_diff1) > 0:
+                    msg += '\textra PMIDs: '+str(pmids_diff1)
+                if len(pmids_diff2) > 0:
+                    msg += '\tmissing PMIDs: '+str(pmids_diff2)
+            msg += '\n'
+
+        print(msg)
+        self.assertTrue(count, 'Count for disease tags')
+
+    def _get_pmids(self, disease):
+        ''' Get the PMID list from NCBI XML file. '''
+        xmlfile = 'disease_pub_'+disease+'.tmp'
+        tree = ET.parse(os.path.join(PublicationTest.TEST_DATA_DIR, xmlfile))
+        idlist = tree.find("IdList")
+        ids = list(idlist.iter("Id"))
+        return [i.text for i in ids]
