@@ -1,4 +1,4 @@
-''' Data integrity tests for gene pathway index '''
+''' Data integrity tests for gene interaction index '''
 from django.test import TestCase
 from elastic.elastic_settings import ElasticSettings
 import logging
@@ -17,7 +17,7 @@ class GeneInteractionDataTest(TestCase):
     '''Gene Interaction test '''
 
     def test_gene_interactions(self):
-        '''Fetch random genes from elastic and compare the same with the results fetched via ensembl restful query'''
+        '''Fetch random genes from elastic and compare the same with the results fetched directly from intact'''
         # elastic doc example:
         # "_source":{"interaction_source": "intact", "interactors": [
         # {"interactor": "ENSG00000206053", "pubmed": "16169070"},
@@ -49,7 +49,7 @@ class GeneInteractionDataTest(TestCase):
         self.check_intact_data(child_doc_intact, parent_doc_intact)
 
     def get_interaction_doc(self, interaction_source='intact', parent_id=None):
-
+        '''Fetch random and specific genes from elastic'''
         idx_key = 'GENE'
         idx_type_key = 'INTERACTIONS'
         parent_idx_key = 'GENE'
@@ -79,7 +79,7 @@ class GeneInteractionDataTest(TestCase):
             return self.get_interaction_doc("intact", parent_id)
 
     def check_intact_data(self, child_doc, parent_doc):
-
+        '''Fetch interactors stored in elastic and compare them with what is fetched from source'''
         config = IniParser().read_ini("download.ini")
         self.assertEqual(getattr(child_doc, "interaction_source"), 'intact', 'interaction_source is intact')
 
@@ -120,6 +120,14 @@ class GeneInteractionDataTest(TestCase):
                         intact_interactors |= set(result_list)  # union operator
 
                 self.assertEqual(len(pydgin_interactors), len(intact_interactors), "Interactors size equal")
+
+                pydgin = list(pydgin_interactors)
+                intact = list(intact_interactors)
+                pydgin.sort()
+                intact.sort()
+
+                for x, y in zip(pydgin, intact):
+                    self.assertEqual(x, y, 'Interactors are equal ' + x + '  <=> ' + y)
 
     def check_bioplex_data(self, child_doc, parent_doc):
         '''
