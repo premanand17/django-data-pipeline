@@ -1,4 +1,4 @@
-''' Data integrity tests for gene pathway index '''
+''' Data integrity tests for gene interaction index '''
 from django.test import TestCase
 from elastic.elastic_settings import ElasticSettings
 import logging
@@ -8,6 +8,8 @@ from data_pipeline.helper.gene import Gene
 from data_pipeline.utils import IniParser
 from data_pipeline.download import HTTPDownload, FTPDownload
 import re
+import zipfile
+import csv
 logger = logging.getLogger(__name__)
 
 
@@ -15,7 +17,7 @@ class GeneInteractionDataTest(TestCase):
     '''Gene Interaction test '''
 
     def test_gene_interactions(self):
-        '''Fetch random genes from elastic and compare the same with the results fetched via ensembl restful query'''
+        '''Fetch random genes from elastic and compare the same with the results fetched directly from intact'''
         # elastic doc example:
         # "_source":{"interaction_source": "intact", "interactors": [
         # {"interactor": "ENSG00000206053", "pubmed": "16169070"},
@@ -33,19 +35,21 @@ class GeneInteractionDataTest(TestCase):
         doc_count = DataIntegrityUtils.get_docs_count(idx, idx_type)
         self.assertGreater(doc_count, 23000, 'Gene doc count greater than 60000')
 
-        # Get interaction doc - passing the interaction source and id if needed
+        # Get interaction doc - passing the interaction source and id . Also test with random id
         (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex", "ENSG00000241186")
-        #self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
+        self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
 
         (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex")
-        #self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
+        self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
+
+        (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact", parent_id="ENSG00000090776")
+        self.check_intact_data(child_doc_intact, parent_doc_intact)
 
         (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact")
         self.check_intact_data(child_doc_intact, parent_doc_intact)
 
-
     def get_interaction_doc(self, interaction_source='intact', parent_id=None):
-
+        '''Fetch random and specific genes from elastic'''
         idx_key = 'GENE'
         idx_type_key = 'INTERACTIONS'
         parent_idx_key = 'GENE'
@@ -68,29 +72,62 @@ class GeneInteractionDataTest(TestCase):
         parent_docs = DataIntegrityUtils.fetch_from_elastic(idx_key, parent_idx_key, [parent_id])
 
         if parent_docs:
-            self.assertTrue(len(parent_docs) == 1, "Found 1 parent")
+            self.assertTrue(len(parent_docs) >= 1, "Found 1 parent")
             parent_doc = parent_docs[0]
             return doc, parent_doc
         else:
             return self.get_interaction_doc("intact", parent_id)
 
     def check_intact_data(self, child_doc, parent_doc):
-
+        '''Fetch interactors stored in elastic and compare them with what is fetched from source'''
         config = IniParser().read_ini("download.ini")
         self.assertEqual(getattr(child_doc, "interaction_source"), 'intact', 'interaction_source is intact')
-        # Get interactors
-        interactors = getattr(child_doc, 'interactors')
-        ensembl_ids_interactors = [interactor['interactor'] for interactor in interactors]
 
+        # Get interactors already stored in our pipeline
+        interactors = getattr(child_doc, 'interactors')
+        pydgin_interactors = [interactor['interactor'] for interactor in interactors]
+
+        # add parent id as well
         parent_id = parent_doc.doc_id()
+        pydgin_interactors.append(parent_id)
+
         self.assertEqual(parent_id, child_doc.parent(), 'Parent id ok')
 
         # Download intact file from source and search for the parent entrez id interactors
         section_intact = config["INTACT"]
         file_url = section_intact['location'] + section_intact['files']
-
         status = FTPDownload.download(file_url, '/tmp', 'intact.zip')
-        print(status)
+        # status = True
+        if status:
+            parent_intact = set()
+            zf = zipfile.ZipFile('/tmp/intact.zip', 'r')
+
+            my_regex = re.escape(parent_id)
+            if 'intact.txt' in zf.namelist():
+                target_path = zf.extract(member='intact.txt', path='/tmp')
+                with open(target_path, encoding='utf-8') as csvfile:
+                    reader = csv.reader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
+                    for row in reader:
+                        line = '\t'.join(row)
+                        match = re.search(my_regex, line)
+                        if match:
+                            parent_intact.add(line)
+
+                intact_interactors = set()
+                for line in parent_intact:
+                    result_list = re.findall(r"(ENSG[0-9]*)", line)
+                    if result_list:
+                        intact_interactors |= set(result_list)  # union operator
+
+                self.assertEqual(len(pydgin_interactors), len(intact_interactors), "Interactors size equal")
+
+                pydgin = list(pydgin_interactors)
+                intact = list(intact_interactors)
+                pydgin.sort()
+                intact.sort()
+
+                for x, y in zip(pydgin, intact):
+                    self.assertEqual(x, y, 'Interactors are equal ' + x + '  <=> ' + y)
 
     def check_bioplex_data(self, child_doc, parent_doc):
         '''
