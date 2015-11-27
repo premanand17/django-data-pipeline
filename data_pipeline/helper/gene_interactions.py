@@ -1,5 +1,4 @@
 import logging
-from builtins import classmethod
 import sys
 import csv
 import re
@@ -9,8 +8,6 @@ import json
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 from data_pipeline.helper.gene import Gene
-from elastic.search import ElasticQuery, Search
-from elastic.query import TermsFilter, BoolQuery
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +129,6 @@ class GeneInteractions(Gene):
                 with open(target_path, encoding='utf-8') as csvfile:
                     reader = csv.DictReader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
                     for row in reader:
-                            # print(row)
-                            # check for taxid
-                            re.compile('taxid:9606')
                             is_human_A = cls._check_tax_id(row['Taxid interactor A'], 'taxid:9606')
                             is_human_B = cls._check_tax_id(row['Taxid interactor B'], 'taxid:9606')
 
