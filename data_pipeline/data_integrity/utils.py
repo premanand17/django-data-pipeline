@@ -72,6 +72,23 @@ class DataIntegrityUtils(object):
             return None
 
     @classmethod
+    def fetch_xref_from_ensembl(cls, gene_id):
+        '''Lookup ensembl entrez mapping via restful call'''
+        server = "http://rest.ensembl.org"
+        ext = "/xrefs/id/" + gene_id + "?content-type=application/json;expand=1;external_db=EntrezGene"
+
+        url = server+ext
+        logger.debug(url)
+
+        response = requests.get(url)
+
+        if response.ok:
+            data = json.loads(response.content.decode('utf-8'))
+            return data
+        else:
+            return None
+
+    @classmethod
     def fetch_from_elastic(cls, idx, idx_type, feature_ids):
         '''Lookup pydgin elastic'''
         query = ElasticQuery(Query.ids(feature_ids))
