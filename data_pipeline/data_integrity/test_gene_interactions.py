@@ -62,7 +62,7 @@ class GeneInteractionDataTest(TestCase):
         self.assertGreater(doc_count, 23000, 'Gene doc count greater than 60000')
 
         # Get interaction doc - passing the interaction source and id . Also test with random id
-        (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex", "ENSG00000241186")
+        (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex", parent_id="ENSG00000164933")
         self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
 
         (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex")
@@ -185,7 +185,6 @@ class GeneInteractionDataTest(TestCase):
         self.assertEqual(parent_id, child_doc.parent(), 'Parent id ok')
 
         parent_entrez = getattr(parent_doc, "dbxrefs")["entrez"]
-
         # Download bioplex file from source and search for the parent entrez id interactors
         my_regex = r"\b" + re.escape(parent_entrez) + r"\b"
         interactor_counter = 0
@@ -215,5 +214,11 @@ class GeneInteractionDataTest(TestCase):
             # now check if these ids exists in history
             # Do a entrez to ensembl id lookup in gene history
             (newgene_ids, discontinued_ids) = Gene._check_gene_history(list(diff), config)  # @UnusedVariable
-            self.assertEqual(len(diff), len(discontinued_ids),
-                             "The missing ids where found in gene_history as discontinued ids")
+            if(len(diff) == len(discontinued_ids)):
+                self.assertEqual(len(diff), len(discontinued_ids),
+                                 "The missing ids where found in gene_history as discontinued ids")
+            else:
+                # check in ensembl xref
+                for gene_id in diff:
+                    ensembl_gene_xref = DataIntegrityUtils.fetch_xref_from_ensembl(gene_id)
+                    self.assertTrue(len(ensembl_gene_xref) == 0, "mapping not found in ensembl for " + gene_id)
