@@ -1,20 +1,23 @@
 ''' Data integrity tests for publications index '''
 from django.test import TestCase
 from data_pipeline.utils import IniParser
-from data_pipeline.download import HTTPDownload
+from data_pipeline.download import HTTPDownload, FTPDownload
 import xml.etree.ElementTree as ET
+from urllib.parse import urljoin
 from elastic.query import Query, BoolQuery, Filter
 from elastic.search import ElasticQuery, Search
 from elastic.elastic_settings import ElasticSettings
 import data_pipeline
 import logging
 import os
+import gzip
+import re
 
 logger = logging.getLogger(__name__)
 
 
-class PublicationTest(TestCase):
-    ''' Publication tests. '''
+class DiseasePublicationTest(TestCase):
+    ''' Disease publication tests. '''
     TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
     DISEASES = []
 
@@ -40,20 +43,20 @@ class PublicationTest(TestCase):
             file_name = 'disease_pub_'+disease+'.tmp'
             HTTPDownload().download(section['location']+"?"+section['http_params'],
                                     cls.TEST_DATA_DIR, file_name=file_name)
-            PublicationTest.DISEASES.append(disease)
+            DiseasePublicationTest.DISEASES.append(disease)
         print()
 
     @classmethod
     def tearDownClass(cls):
         ''' Remove disease publication files. '''
-        super(PublicationTest, cls)
+        super(DiseasePublicationTest, cls)
         for disease in cls.DISEASES:
             file_name = 'disease_pub_'+disease+'.tmp'
             os.remove(os.path.join(cls.TEST_DATA_DIR, file_name))
 
-    def test_publication_disease_counts(self):
+    def test_pub_disease_counts(self):
         ''' Check all publications exist in the publication index. '''
-        for disease in PublicationTest.DISEASES:
+        for disease in DiseasePublicationTest.DISEASES:
             pmids = self._get_pmids(disease)
             disease_code = disease.lower()
             elastic = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(pmids)))),
@@ -66,12 +69,12 @@ class PublicationTest(TestCase):
             pmids_diff = list(set(pmids) - set(pmids_in_idx))
             self.assertEquals(len(pmids_diff), 0)
 
-    def test_publications_disease_tags(self):
+    def test_pubs_disease_tags(self):
         ''' Check the number of disease publications against the number of tags.disease and
         report differences`. '''
         count = True
         msg = ''
-        for disease in PublicationTest.DISEASES:
+        for disease in DiseasePublicationTest.DISEASES:
             pmids = self._get_pmids(disease)
             disease_code = disease.lower()
             elastic = Search(search_query=ElasticQuery(BoolQuery(
@@ -97,7 +100,51 @@ class PublicationTest(TestCase):
     def _get_pmids(self, disease):
         ''' Get the PMID list from NCBI XML file. '''
         xmlfile = 'disease_pub_'+disease+'.tmp'
-        tree = ET.parse(os.path.join(PublicationTest.TEST_DATA_DIR, xmlfile))
+        tree = ET.parse(os.path.join(DiseasePublicationTest.TEST_DATA_DIR, xmlfile))
         idlist = tree.find("IdList")
         ids = list(idlist.iter("Id"))
         return [i.text for i in ids]
+
+
+class GenePublicationTest(TestCase):
+    '''Gene publication tests. '''
+
+    NUM_DIFF = 1000  # difference allowed for between index and NCBI
+
+    def test_gene_pubs(self):
+        ''' Check the difference between the pubs indexed and those from the gene_pub file
+        from the NCBI. If the publication pipeline has not been run recently there is likely
+        to be a difference. This is allowed for with the NUM_DIFF variable. If there is a
+        larger difference than this then the publication pipeline should be run. '''
+        ini = IniParser()
+        config = ini.read_ini('publications.ini')
+        section = config['GENE']
+
+        file_name = 'gene_pub_test.tmp'
+        download_file = os.path.join(DiseasePublicationTest.TEST_DATA_DIR, file_name)
+        success = FTPDownload().download(urljoin(section['location'], section['files']),
+                                         DiseasePublicationTest.TEST_DATA_DIR, file_name=file_name)
+        self.assertTrue(success, 'downloaded gene publications file')
+
+        pmids = set()
+        with gzip.open(download_file, 'rt') as outf:
+            seen_add = pmids.add
+            for x in outf:
+                if not x.startswith('9606\t'):
+                    continue
+                pmid = re.split('\t', x)[2].strip()
+                if pmid not in pmids:
+                    seen_add(pmid)
+
+        elastic = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(list(pmids)))),
+                                                   sources=['pmid']),
+                         idx=ElasticSettings.idx('PUBLICATION'), size=len(pmids)*2)
+        self.assertLess(len(pmids)-elastic.get_count()['count'], GenePublicationTest.NUM_DIFF,
+                        'Count for gene publications')
+
+        # check for differences in pmids
+        docs = elastic.search().docs
+        pmids_in_idx = [getattr(doc, 'pmid') for doc in docs]
+        pmids_diff = list(pmids - set(pmids_in_idx))
+        self.assertLess(len(pmids_diff), GenePublicationTest.NUM_DIFF)
+        os.remove(download_file)
