@@ -10,7 +10,33 @@ from data_pipeline.download import HTTPDownload, FTPDownload
 import re
 import zipfile
 import csv
+import data_pipeline
+import os
 logger = logging.getLogger(__name__)
+
+TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
+INTACT = 'intact.zip'
+BIOPLEX = 'bioplex.tmp'
+
+
+def setUpModule():
+        config = IniParser().read_ini("download.ini")
+        # Download intact file from source
+        section_intact = config["INTACT"]
+        file_url = section_intact['location'] + section_intact['files']
+        status = FTPDownload.download(file_url, TEST_DATA_DIR, INTACT)
+        logger.warn("Download status for intact " + str(status))
+
+        section_bioplex = config["BIOPLEX"]
+        file_url = section_bioplex['location'] + section_bioplex['files']
+
+        status = HTTPDownload.download(file_url, TEST_DATA_DIR, BIOPLEX)
+        logger.warn("Download status for bioplex " + str(status))
+
+
+def tearDownModule():
+    os.remove(os.path.join(TEST_DATA_DIR, INTACT))
+    os.remove(os.path.join(TEST_DATA_DIR, BIOPLEX))
 
 
 class GeneInteractionDataTest(TestCase):
@@ -42,7 +68,7 @@ class GeneInteractionDataTest(TestCase):
         (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex")
         self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
 
-        (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact", parent_id="ENSG00000090776")
+        (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact", parent_id="ENSG00000185608")
         self.check_intact_data(child_doc_intact, parent_doc_intact)
 
         (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact")
@@ -80,44 +106,44 @@ class GeneInteractionDataTest(TestCase):
 
     def check_intact_data(self, child_doc, parent_doc):
         '''Fetch interactors stored in elastic and compare them with what is fetched from source'''
-        config = IniParser().read_ini("download.ini")
         self.assertEqual(getattr(child_doc, "interaction_source"), 'intact', 'interaction_source is intact')
 
         # Get interactors already stored in our pipeline
         interactors = getattr(child_doc, 'interactors')
         pydgin_interactors = [interactor['interactor'] for interactor in interactors]
 
-        # add parent id as well
         parent_id = parent_doc.doc_id()
-        pydgin_interactors.append(parent_id)
-
         self.assertEqual(parent_id, child_doc.parent(), 'Parent id ok')
 
         # Download intact file from source and search for the parent entrez id interactors
-        section_intact = config["INTACT"]
-        file_url = section_intact['location'] + section_intact['files']
-        status = FTPDownload.download(file_url, '/tmp', 'intact.zip')
-        # status = True
-        if status:
+        if os.path.isfile(TEST_DATA_DIR + '/' + INTACT):
             parent_intact = set()
-            zf = zipfile.ZipFile('/tmp/intact.zip', 'r')
+            zf = zipfile.ZipFile(TEST_DATA_DIR + '/' + INTACT, 'r')
 
             my_regex = re.escape(parent_id)
             if 'intact.txt' in zf.namelist():
-                target_path = zf.extract(member='intact.txt', path='/tmp')
+                target_path = zf.extract(member='intact.txt', path=TEST_DATA_DIR)
                 with open(target_path, encoding='utf-8') as csvfile:
                     reader = csv.reader(csvfile, delimiter='\t', quoting=csv.QUOTE_NONE)
                     for row in reader:
+                        interactorA = row[22]
+                        interactorB = row[23]
+
                         line = '\t'.join(row)
-                        match = re.search(my_regex, line)
-                        if match:
-                            parent_intact.add(line)
+                        matchA = re.search(my_regex, interactorA)
+                        if matchA:
+                            parent_intact.add(interactorB)
+
+                        matchB = re.search(my_regex, interactorB)
+                        if matchB:
+                            parent_intact.add(interactorA)
 
                 intact_interactors = set()
                 for line in parent_intact:
-                    result_list = re.findall(r"(ENSG[0-9]*)", line)
-                    if result_list:
-                        intact_interactors |= set(result_list)  # union operator
+                    match = re.search(r"(ENSG[0-9]*)", line)
+                    if match:
+                        result_list = match.group(0)
+                        intact_interactors.add(result_list)
 
                 self.assertEqual(len(pydgin_interactors), len(intact_interactors), "Interactors size equal")
 
@@ -161,15 +187,11 @@ class GeneInteractionDataTest(TestCase):
         parent_entrez = getattr(parent_doc, "dbxrefs")["entrez"]
 
         # Download bioplex file from source and search for the parent entrez id interactors
-        section_bioplex = config["BIOPLEX"]
-        file_url = section_bioplex['location'] + section_bioplex['files']
-
-        status = HTTPDownload.download(file_url, '/tmp', 'bioplex.tmp')
         my_regex = r"\b" + re.escape(parent_entrez) + r"\b"
         interactor_counter = 0
-        if status:
+        if os.path.isfile(TEST_DATA_DIR + '/' + BIOPLEX):
             entrez_list_bioplex = set()
-            with open('/tmp/bioplex.tmp', "r") as data:
+            with open(TEST_DATA_DIR + '/' + BIOPLEX, "r") as data:
                 for line in data:
                     if re.search(my_regex, line):
                         tmp_list = line.split()
