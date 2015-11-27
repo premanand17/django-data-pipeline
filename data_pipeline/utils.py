@@ -18,7 +18,6 @@ from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
 from data_pipeline.helper.marker import ImmunoChip
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
