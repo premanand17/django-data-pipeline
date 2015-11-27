@@ -9,8 +9,6 @@ import json
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 from data_pipeline.helper.gene import Gene
-from elastic.search import ElasticQuery, Search
-from elastic.query import TermsFilter, BoolQuery
 
 logger = logging.getLogger(__name__)
 

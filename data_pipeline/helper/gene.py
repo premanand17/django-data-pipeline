@@ -8,7 +8,6 @@ from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 from data_pipeline.helper.exceptions import PipelineError
 import json
-from configparser import SectionProxy
 
 logger = logging.getLogger(__name__)
 
