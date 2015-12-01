@@ -68,7 +68,7 @@ class GeneInteractionDataTest(TestCase):
         (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex")
         self.check_bioplex_data(child_doc_bioplex, parent_doc_bioplex)
 
-        (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact", parent_id="ENSG00000185608")
+        (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact", parent_id="ENSG00000188786")
         self.check_intact_data(child_doc_intact, parent_doc_intact)
 
         (child_doc_intact, parent_doc_intact) = self.get_interaction_doc("intact")
@@ -129,7 +129,7 @@ class GeneInteractionDataTest(TestCase):
                         interactorA = row[22]
                         interactorB = row[23]
 
-                        line = '\t'.join(row)
+                        # line = '\t'.join(row)
                         matchA = re.search(my_regex, interactorA)
                         if matchA:
                             parent_intact.add(interactorB)
@@ -139,11 +139,11 @@ class GeneInteractionDataTest(TestCase):
                             parent_intact.add(interactorA)
 
                 intact_interactors = set()
-                for line in parent_intact:
-                    match = re.search(r"(ENSG[0-9]*)", line)
+                for interactor_line in parent_intact:
+                    match = re.search(r"(ENSG[0-9]*)", interactor_line)
                     if match:
-                        result_list = match.group(0)
-                        intact_interactors.add(result_list)
+                        result = match.group(0)
+                        intact_interactors.add(result)
 
                 self.assertEqual(len(pydgin_interactors), len(intact_interactors), "Interactors size equal")
 
@@ -151,6 +151,9 @@ class GeneInteractionDataTest(TestCase):
                 intact = list(intact_interactors)
                 pydgin.sort()
                 intact.sort()
+
+                logger.debug(pydgin)
+                logger.debug(intact)
 
                 for x, y in zip(pydgin, intact):
                     self.assertEqual(x, y, 'Interactors are equal ' + x + '  <=> ' + y)
