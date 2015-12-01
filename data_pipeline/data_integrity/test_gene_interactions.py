@@ -12,7 +12,6 @@ import zipfile
 import csv
 import data_pipeline
 import os
-from django.contrib.admin.templatetags.admin_list import result_list
 logger = logging.getLogger(__name__)
 
 TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
@@ -143,8 +142,8 @@ class GeneInteractionDataTest(TestCase):
                 for interactor_line in parent_intact:
                     match = re.search(r"(ENSG[0-9]*)", interactor_line)
                     if match:
-                        result_list = match.group(0)
-                        intact_interactors.add(result_list)
+                        result = match.group(0)
+                        intact_interactors.add(result)
 
                 self.assertEqual(len(pydgin_interactors), len(intact_interactors), "Interactors size equal")
 
@@ -152,6 +151,10 @@ class GeneInteractionDataTest(TestCase):
                 intact = list(intact_interactors)
                 pydgin.sort()
                 intact.sort()
+
+                logger.debug(pydgin)
+                logger.debug(intact)
+
                 for x, y in zip(pydgin, intact):
                     self.assertEqual(x, y, 'Interactors are equal ' + x + '  <=> ' + y)
 
