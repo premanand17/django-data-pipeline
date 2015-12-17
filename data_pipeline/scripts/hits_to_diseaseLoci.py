@@ -16,7 +16,7 @@ os.environ['DJANGO_SETTINGS_MODULE'] = 'pydgin.settings'
 django.setup()
 
 from elastic.aggs import Agg, Aggs
-from elastic.search import ElasticQuery, FilteredQuery, Search, Sort
+from elastic.search import ElasticQuery, FilteredQuery, Search, Sort, Delete, Update
 from elastic.query import Query, AndFilter, RangeQuery, BoolQuery
 from elastic.elastic_settings import ElasticSettings
 
