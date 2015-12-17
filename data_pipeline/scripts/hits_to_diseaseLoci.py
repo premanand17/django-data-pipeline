@@ -25,8 +25,8 @@ tier_cutoff = 2
 build = 38
 
 idx = ElasticSettings.idx('REGIONS')
-os.system("curl -XDELETE '"+ElasticSettings.url()+"/" + idx +
-          "/disease_locus/_query?pretty' -d '{ \"query\": { \"bool\": { \"must\": [ { \"match_all\": {} } ] }}}'")
+Delete.docs_by_query(idx, idx_type='disease_locus')
+
 buildSort = {"sort": [
         {"build_info.start":
             {"order": "asc",
@@ -59,6 +59,7 @@ def add_disease_locus(seqid, locus_id, regionName, disease, tier, species, weigh
     else:
         print("Loaded "+locus_id+" - "+regionName)
 
+Search.refresh(idx)
 diseases_by_seqid = Agg('diseases_by_seqid', 'terms', {"size": 0, "field": "disease"})
 disease_hits = Agg('disease_hits', 'reverse_nested', {}, sub_agg=diseases_by_seqid)
 seq_hits = Agg('seq_hits', 'terms', {'field': 'build_info.seqid', 'size': 0}, sub_agg=disease_hits)

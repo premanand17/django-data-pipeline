@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import json
+import django
 
 PYDGIN = None
 if 'PYDGIN' in os.environ:
@@ -12,6 +13,7 @@ else:
 
 sys.path.append(PYDGIN)
 os.environ['DJANGO_SETTINGS_MODULE'] = 'pydgin.settings'
+django.setup()
 
 from elastic.aggs import Agg, Aggs
 from elastic.search import ElasticQuery, FilteredQuery, Search, Sort, Delete, Update
@@ -43,6 +45,7 @@ def add_region(seqid, region_id, regionName, tier, species, weight, diseases, do
     else:
         print("Loaded "+region_id+" - "+regionName)
 
+Search.refresh(idx)
 locus_start = Agg('locus_start', 'min', {'field': 'build_info.start'})
 locus_end = Agg('locus_end', 'max', {'field': 'build_info.end'})
 match_agg = Agg('filtered_result', 'filter', Query.match("build_info.build", build).query_wrap(),
