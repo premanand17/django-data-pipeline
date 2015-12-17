@@ -45,7 +45,7 @@ def add_region(seqid, region_id, regionName, tier, species, weight, diseases, do
     else:
         print("Loaded "+region_id+" - "+regionName)
 
-Search.refresh(idx)
+Search.index_refresh(idx)
 locus_start = Agg('locus_start', 'min', {'field': 'build_info.start'})
 locus_end = Agg('locus_end', 'max', {'field': 'build_info.end'})
 match_agg = Agg('filtered_result', 'filter', Query.match("build_info.build", build).query_wrap(),

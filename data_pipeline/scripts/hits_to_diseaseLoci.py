@@ -59,7 +59,7 @@ def add_disease_locus(seqid, locus_id, regionName, disease, tier, species, weigh
     else:
         print("Loaded "+locus_id+" - "+regionName)
 
-Search.refresh(idx)
+Search.index_refresh(idx)
 diseases_by_seqid = Agg('diseases_by_seqid', 'terms', {"size": 0, "field": "disease"})
 disease_hits = Agg('disease_hits', 'reverse_nested', {}, sub_agg=diseases_by_seqid)
 seq_hits = Agg('seq_hits', 'terms', {'field': 'build_info.seqid', 'size': 0}, sub_agg=disease_hits)
