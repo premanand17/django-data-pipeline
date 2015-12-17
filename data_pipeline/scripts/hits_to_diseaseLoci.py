@@ -2,6 +2,7 @@ import os
 import sys
 import requests
 import json
+import django
 
 PYDGIN = None
 if 'PYDGIN' in os.environ:
@@ -12,6 +13,7 @@ else:
 
 sys.path.append(PYDGIN)
 os.environ['DJANGO_SETTINGS_MODULE'] = 'pydgin.settings'
+django.setup()
 
 from elastic.aggs import Agg, Aggs
 from elastic.search import ElasticQuery, FilteredQuery, Search, Sort
@@ -28,7 +30,8 @@ os.system("curl -XDELETE '"+ElasticSettings.url()+"/" + idx +
 buildSort = {"sort": [
         {"build_info.start":
             {"order": "asc",
-                "nested_filter": {
+             "nested_path": "build_info",
+             "nested_filter": {
                     "term": {
                         "build_info.build": build
                     }
@@ -69,6 +72,7 @@ seq_hits = getattr(resultAggs['build_info'], 'seq_hits')['buckets']
 
 for chr_bucket in seq_hits:
     seqid = chr_bucket['key'].upper()
+    
     for disease_bucket in chr_bucket['disease_hits']['diseases_by_seqid']['buckets']:
         # print(disease_bucket)
         disease_code = disease_bucket['key']
@@ -90,7 +94,7 @@ for chr_bucket in seq_hits:
         regionName = ''
         species = ''
         doc_ids = []
-        if len(results.docs) > 0:
+        if len(results.docs) > 0:                        
             for doc in results.docs:
                 # print(doc)
                 os.system("curl -XPOST '"+ElasticSettings.url()+"/"+idx+"/hits/" + doc.doc_id() +
@@ -102,6 +106,7 @@ for chr_bucket in seq_hits:
                 if build_info is None:
                     print("ERROR - no build information found for b"+str(build))
                     continue
+
                 # print(getattr(doc, "disease")+"\t"+getattr(doc, "marker")+"\t" + getattr(doc, "chr_band") + "\t" +
                 #      build_info['seqid'] + "\t" + str(build_info['start']) + "\t" + str(build_info['end']))
                 if minPos == 0 and maxPos == 0:
