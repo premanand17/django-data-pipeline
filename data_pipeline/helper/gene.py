@@ -415,12 +415,18 @@ class Gene(object):
         ''' Get an entrez:ensembl id dictionary. '''
         (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, config)
         replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
+        lookup = {}
+
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            lookup.update({getattr(doc, 'dbxrefs')['entrez']: doc.doc_id() for doc in docs})
+
         equery = ElasticQuery.filtered(Query.match_all(),
                                        TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
                                        sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
-
-        docs = Search(equery, idx=section['index'], size=len(replaced_gene_sets)).search().docs
-        return {getattr(doc, 'dbxrefs')['entrez']: doc.doc_id() for doc in docs}
+        ScanAndScroll.scan_and_scroll(section['index'], call_fun=process_hits, query=equery)
+        return lookup
 
     @classmethod
     def _ensembl_entrez_lookup(cls, ensembl_gene_sets, section):
@@ -437,21 +443,26 @@ class Gene(object):
         '''find a way to handle this better'''
 
         section = config['GENE_HISTORY']
+        newgene_ids = {}
+        discountinued_geneids = []
+
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            for doc in docs:
+                geneid = getattr(doc, 'geneid')
+                discontinued_geneid = getattr(doc, 'discontinued_geneid')
+                if geneid is None:
+                    discountinued_geneids.append(str(discontinued_geneid))
+                else:
+                    newgene_ids[str(discontinued_geneid)] = str(geneid)
+
         query = ElasticQuery.filtered(Query.match_all(),
                                       TermsFilter.get_terms_filter("discontinued_geneid", gene_sets),
                                       sources=['geneid', 'discontinued_geneid'])
-        docs = Search(query, idx=section['index'], idx_type=section['index_type'],
-                      size=len(gene_sets)).search().docs
+        ScanAndScroll.scan_and_scroll(section['index'], idx_type=section['index_type'],
+                                      call_fun=process_hits, query=query)
 
-        newgene_ids = {}
-        discountinued_geneids = []
-        for doc in docs:
-            geneid = getattr(doc, 'geneid')
-            discontinued_geneid = getattr(doc, 'discontinued_geneid')
-            if geneid is None:
-                discountinued_geneids.append(str(discontinued_geneid))
-            else:
-                newgene_ids[str(discontinued_geneid)] = str(geneid)
         return (newgene_ids, discountinued_geneids)
 
     @classmethod
