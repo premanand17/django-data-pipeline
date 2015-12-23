@@ -2,12 +2,13 @@
 
 import logging
 from builtins import classmethod
-from elastic.search import ElasticQuery, Search
+from elastic.search import ElasticQuery, Search, ScanAndScroll
 from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 from data_pipeline.helper.exceptions import PipelineError
 import json
+from elastic.result import Document
 
 logger = logging.getLogger(__name__)
 
@@ -128,22 +129,25 @@ class Gene(object):
                 if ens_id not in genes:
                     genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
 
-        query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            chunk_size = 450
+            for i in range(0, len(docs), chunk_size):
+                docs_chunk = docs[i:i+chunk_size]
+                json_data = ''
+                for doc in docs_chunk:
+                    ens_id = doc._meta['_id']
+                    idx_type = doc.type()
+                    doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                           "_index": idx, "_retry_on_conflict": 3}}
+                    json_data += json.dumps(doc_data) + '\n'
+                    json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
+                if json_data != '':
+                    Loader().bulk_load(idx, idx_type, json_data)
 
-        chunk_size = 450
-        for i in range(0, len(docs), chunk_size):
-            docs_chunk = docs[i:i+chunk_size]
-            json_data = ''
-            for doc in docs_chunk:
-                ens_id = doc._meta['_id']
-                idx_type = doc.type()
-                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
-                                       "_index": idx, "_retry_on_conflict": 3}}
-                json_data += json.dumps(doc_data) + '\n'
-                json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
-            if json_data != '':
-                Loader().bulk_load(idx, idx_type, json_data)
+        query = ElasticQuery(Query.ids(list(genes.keys())))
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
 
     @classmethod
     def ensmart_gene_parse(cls, ensmart_f, idx, idx_type):
@@ -174,32 +178,36 @@ class Gene(object):
                     genes[ens_id]['dbxrefs'].update({'trembl': trembl})
 
         '''  search for the entrez ids '''
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            chunk_size = 450
+            for i in range(0, len(docs), chunk_size):
+                docs_chunk = docs[i:i+chunk_size]
+                json_data = ''
+                for doc in docs_chunk:
+                    ens_id = doc._meta['_id']
+                    if 'dbxrefs' in doc.__dict__:
+                        dbxrefs = getattr(doc, 'dbxrefs')
+                    else:
+                        dbxrefs = {}
+
+                    if ('entrez' in genes[ens_id]['dbxrefs'] and
+                        'entrez' in dbxrefs and
+                       dbxrefs['entrez'] != genes[ens_id]['dbxrefs']['entrez']):
+                        logger.warn('Multiple entrez ids for ensembl id: '+ens_id)
+                        continue
+
+                    idx_type = doc.type()
+                    doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                           "_index": idx, "_retry_on_conflict": 3}}
+                    json_data += json.dumps(doc_data) + '\n'
+                    json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
+                if json_data != '':
+                    Loader().bulk_load(idx, idx_type, json_data)
+
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
-        chunk_size = 450
-        for i in range(0, len(docs), chunk_size):
-            docs_chunk = docs[i:i+chunk_size]
-            json_data = ''
-            for doc in docs_chunk:
-                ens_id = doc._meta['_id']
-                if 'dbxrefs' in doc.__dict__:
-                    dbxrefs = getattr(doc, 'dbxrefs')
-                else:
-                    dbxrefs = {}
-
-                if ('entrez' in genes[ens_id]['dbxrefs'] and
-                    'entrez' in dbxrefs and
-                   dbxrefs['entrez'] != genes[ens_id]['dbxrefs']['entrez']):
-                    logger.warn('Multiple entrez ids for ensembl id: '+ens_id)
-                    continue
-
-                idx_type = doc.type()
-                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
-                                       "_index": idx, "_retry_on_conflict": 3}}
-                json_data += json.dumps(doc_data) + '\n'
-                json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
-            if json_data != '':
-                Loader().bulk_load(idx, idx_type, json_data)
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
 
     @classmethod
     def _add_to_dbxref(cls, gene, db, dbxref):
@@ -234,26 +242,30 @@ class Gene(object):
                 genes[ens_id] = dbxrefs
 
         '''  search for the entrez ids '''
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            chunk_size = 450
+            for i in range(0, len(docs), chunk_size):
+                docs_chunk = docs[i:i+chunk_size]
+                json_data = ''
+                for doc in docs_chunk:
+                    ens_id = doc._meta['_id']
+                    if 'dbxrefs' in doc.__dict__:
+                        dbxrefs = getattr(doc, 'dbxrefs')
+                    else:
+                        dbxrefs = {}
+                    dbxrefs['orthologs'] = genes[ens_id]
+                    idx_type = doc.type()
+                    doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                           "_index": idx, "_retry_on_conflict": 3}}
+                    json_data += json.dumps(doc_data) + '\n'
+                    json_data += json.dumps({'doc': {'dbxrefs': dbxrefs}}) + '\n'
+                if json_data != '':
+                    Loader().bulk_load(idx, idx_type, json_data)
+
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
-        chunk_size = 450
-        for i in range(0, len(docs), chunk_size):
-            docs_chunk = docs[i:i+chunk_size]
-            json_data = ''
-            for doc in docs_chunk:
-                ens_id = doc._meta['_id']
-                if 'dbxrefs' in doc.__dict__:
-                    dbxrefs = getattr(doc, 'dbxrefs')
-                else:
-                    dbxrefs = {}
-                dbxrefs['orthologs'] = genes[ens_id]
-                idx_type = doc.type()
-                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
-                                       "_index": idx, "_retry_on_conflict": 3}}
-                json_data += json.dumps(doc_data) + '\n'
-                json_data += json.dumps({'doc': {'dbxrefs': dbxrefs}}) + '\n'
-            if json_data != '':
-                Loader().bulk_load(idx, idx_type, json_data)
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
 
     @classmethod
     def gene_info_parse(cls, gene_infos, idx):
