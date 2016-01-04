@@ -13,8 +13,8 @@ class RegionDataTest(TestCase):
     IDX_KEY = 'REGIONS'
     IDX_TYPE_KEYS = ['STUDY_HITS', 'DISEASE_LOCUS', 'REGION']
     DOC_COUNTS = {
-        'STUDY_HITS' : 1719,
-        'DISEASE_LOCUS' : 899,
+        'STUDY_HITS' : 1760,
+        'DISEASE_LOCUS' : 900,
         'REGION' : 342     
     }
 
