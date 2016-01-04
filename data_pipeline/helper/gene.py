@@ -2,12 +2,13 @@
 
 import logging
 from builtins import classmethod
-from elastic.search import ElasticQuery, Search
+from elastic.search import ElasticQuery, Search, ScanAndScroll
 from elastic.query import Query, TermsFilter
 from elastic.management.loaders.mapping import MappingProperties
 from elastic.management.loaders.loader import Loader
 from data_pipeline.helper.exceptions import PipelineError
 import json
+from elastic.result import Document
 
 logger = logging.getLogger(__name__)
 
@@ -128,22 +129,25 @@ class Gene(object):
                 if ens_id not in genes:
                     genes[ens_id] = {'dbxrefs': {'entrez': gene_id}}
 
-        query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            chunk_size = 450
+            for i in range(0, len(docs), chunk_size):
+                docs_chunk = docs[i:i+chunk_size]
+                json_data = ''
+                for doc in docs_chunk:
+                    ens_id = doc._meta['_id']
+                    idx_type = doc.type()
+                    doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                           "_index": idx, "_retry_on_conflict": 3}}
+                    json_data += json.dumps(doc_data) + '\n'
+                    json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
+                if json_data != '':
+                    Loader().bulk_load(idx, idx_type, json_data)
 
-        chunk_size = 450
-        for i in range(0, len(docs), chunk_size):
-            docs_chunk = docs[i:i+chunk_size]
-            json_data = ''
-            for doc in docs_chunk:
-                ens_id = doc._meta['_id']
-                idx_type = doc.type()
-                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
-                                       "_index": idx, "_retry_on_conflict": 3}}
-                json_data += json.dumps(doc_data) + '\n'
-                json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
-            if json_data != '':
-                Loader().bulk_load(idx, idx_type, json_data)
+        query = ElasticQuery(Query.ids(list(genes.keys())))
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
 
     @classmethod
     def ensmart_gene_parse(cls, ensmart_f, idx, idx_type):
@@ -174,32 +178,36 @@ class Gene(object):
                     genes[ens_id]['dbxrefs'].update({'trembl': trembl})
 
         '''  search for the entrez ids '''
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            chunk_size = 450
+            for i in range(0, len(docs), chunk_size):
+                docs_chunk = docs[i:i+chunk_size]
+                json_data = ''
+                for doc in docs_chunk:
+                    ens_id = doc._meta['_id']
+                    if 'dbxrefs' in doc.__dict__:
+                        dbxrefs = getattr(doc, 'dbxrefs')
+                    else:
+                        dbxrefs = {}
+
+                    if ('entrez' in genes[ens_id]['dbxrefs'] and
+                        'entrez' in dbxrefs and
+                       dbxrefs['entrez'] != genes[ens_id]['dbxrefs']['entrez']):
+                        logger.warn('Multiple entrez ids for ensembl id: '+ens_id)
+                        continue
+
+                    idx_type = doc.type()
+                    doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                           "_index": idx, "_retry_on_conflict": 3}}
+                    json_data += json.dumps(doc_data) + '\n'
+                    json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
+                if json_data != '':
+                    Loader().bulk_load(idx, idx_type, json_data)
+
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
-        chunk_size = 450
-        for i in range(0, len(docs), chunk_size):
-            docs_chunk = docs[i:i+chunk_size]
-            json_data = ''
-            for doc in docs_chunk:
-                ens_id = doc._meta['_id']
-                if 'dbxrefs' in doc.__dict__:
-                    dbxrefs = getattr(doc, 'dbxrefs')
-                else:
-                    dbxrefs = {}
-
-                if ('entrez' in genes[ens_id]['dbxrefs'] and
-                    'entrez' in dbxrefs and
-                   dbxrefs['entrez'] != genes[ens_id]['dbxrefs']['entrez']):
-                    logger.warn('Multiple entrez ids for ensembl id: '+ens_id)
-                    continue
-
-                idx_type = doc.type()
-                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
-                                       "_index": idx, "_retry_on_conflict": 3}}
-                json_data += json.dumps(doc_data) + '\n'
-                json_data += json.dumps({'doc': genes[ens_id]}) + '\n'
-            if json_data != '':
-                Loader().bulk_load(idx, idx_type, json_data)
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
 
     @classmethod
     def _add_to_dbxref(cls, gene, db, dbxref):
@@ -234,26 +242,30 @@ class Gene(object):
                 genes[ens_id] = dbxrefs
 
         '''  search for the entrez ids '''
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            chunk_size = 450
+            for i in range(0, len(docs), chunk_size):
+                docs_chunk = docs[i:i+chunk_size]
+                json_data = ''
+                for doc in docs_chunk:
+                    ens_id = doc._meta['_id']
+                    if 'dbxrefs' in doc.__dict__:
+                        dbxrefs = getattr(doc, 'dbxrefs')
+                    else:
+                        dbxrefs = {}
+                    dbxrefs['orthologs'] = genes[ens_id]
+                    idx_type = doc.type()
+                    doc_data = {"update": {"_id": ens_id, "_type": idx_type,
+                                           "_index": idx, "_retry_on_conflict": 3}}
+                    json_data += json.dumps(doc_data) + '\n'
+                    json_data += json.dumps({'doc': {'dbxrefs': dbxrefs}}) + '\n'
+                if json_data != '':
+                    Loader().bulk_load(idx, idx_type, json_data)
+
         query = ElasticQuery(Query.ids(list(genes.keys())))
-        docs = Search(query, idx=idx, idx_type=idx_type, size=80000).search().docs
-        chunk_size = 450
-        for i in range(0, len(docs), chunk_size):
-            docs_chunk = docs[i:i+chunk_size]
-            json_data = ''
-            for doc in docs_chunk:
-                ens_id = doc._meta['_id']
-                if 'dbxrefs' in doc.__dict__:
-                    dbxrefs = getattr(doc, 'dbxrefs')
-                else:
-                    dbxrefs = {}
-                dbxrefs['orthologs'] = genes[ens_id]
-                idx_type = doc.type()
-                doc_data = {"update": {"_id": ens_id, "_type": idx_type,
-                                       "_index": idx, "_retry_on_conflict": 3}}
-                json_data += json.dumps(doc_data) + '\n'
-                json_data += json.dumps({'doc': {'dbxrefs': dbxrefs}}) + '\n'
-            if json_data != '':
-                Loader().bulk_load(idx, idx_type, json_data)
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
 
     @classmethod
     def gene_info_parse(cls, gene_infos, idx):
@@ -403,12 +415,18 @@ class Gene(object):
         ''' Get an entrez:ensembl id dictionary. '''
         (newgene_ids, discontinued_ids) = Gene._check_gene_history(gene_sets, config)
         replaced_gene_sets = Gene._replace_oldids_with_newids(gene_sets, newgene_ids, discontinued_ids)
+        lookup = {}
+
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            lookup.update({getattr(doc, 'dbxrefs')['entrez']: doc.doc_id() for doc in docs})
+
         equery = ElasticQuery.filtered(Query.match_all(),
                                        TermsFilter.get_terms_filter("dbxrefs.entrez", replaced_gene_sets),
                                        sources=['dbxrefs.ensembl', 'dbxrefs.entrez'])
-
-        docs = Search(equery, idx=section['index'], size=len(replaced_gene_sets)).search().docs
-        return {getattr(doc, 'dbxrefs')['entrez']: doc.doc_id() for doc in docs}
+        ScanAndScroll.scan_and_scroll(section['index'], call_fun=process_hits, query=equery)
+        return lookup
 
     @classmethod
     def _ensembl_entrez_lookup(cls, ensembl_gene_sets, section):
@@ -425,21 +443,26 @@ class Gene(object):
         '''find a way to handle this better'''
 
         section = config['GENE_HISTORY']
+        newgene_ids = {}
+        discountinued_geneids = []
+
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            docs = [Document(hit) for hit in hits]
+            for doc in docs:
+                geneid = getattr(doc, 'geneid')
+                discontinued_geneid = getattr(doc, 'discontinued_geneid')
+                if geneid is None:
+                    discountinued_geneids.append(str(discontinued_geneid))
+                else:
+                    newgene_ids[str(discontinued_geneid)] = str(geneid)
+
         query = ElasticQuery.filtered(Query.match_all(),
                                       TermsFilter.get_terms_filter("discontinued_geneid", gene_sets),
                                       sources=['geneid', 'discontinued_geneid'])
-        docs = Search(query, idx=section['index'], idx_type=section['index_type'],
-                      size=len(gene_sets)).search().docs
+        ScanAndScroll.scan_and_scroll(section['index'], idx_type=section['index_type'],
+                                      call_fun=process_hits, query=query)
 
-        newgene_ids = {}
-        discountinued_geneids = []
-        for doc in docs:
-            geneid = getattr(doc, 'geneid')
-            discontinued_geneid = getattr(doc, 'discontinued_geneid')
-            if geneid is None:
-                discountinued_geneids.append(str(discontinued_geneid))
-            else:
-                newgene_ids[str(discontinued_geneid)] = str(geneid)
         return (newgene_ids, discountinued_geneids)
 
     @classmethod
