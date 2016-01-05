@@ -1,5 +1,4 @@
 import logging
-from builtins import classmethod
 import csv
 import os
 from elastic.management.loaders.mapping import MappingProperties
@@ -28,21 +27,21 @@ class GenePathways(Gene):
         abs_path_staging_dir = os.path.dirname(stage_output_file)
         source = None
         is_public = True if section['is_public'] == 1 else False
-        for file in download_files:
-            stage_output_file = abs_path_staging_dir + '/' + os.path.basename(file) + '.json'
-            source = cls._get_pathway_source(file)
-            cls._process_pathway(file, stage_output_file, section, source, is_public, config)
+        for file_ in download_files:
+            stage_output_file = abs_path_staging_dir + '/' + os.path.basename(file_) + '.json'
+            source = cls._get_pathway_source(file_)
+            cls._process_pathway(file_, stage_output_file, section, source, is_public, config)
 
     @classmethod
-    def _get_pathway_source(cls, file):
+    def _get_pathway_source(cls, file_):
         '''Function to check for the pathway source in file name eg: kegg, reactome, go'''
-        if 'kegg' in file:
+        if 'kegg' in file_:
             source = 'kegg'
-        elif 'reactome' in file:
+        elif 'reactome' in file_:
             source = 'reactome'
-        elif 'biocarta' in file:
+        elif 'biocarta' in file_:
             source = 'biocarta'
-        elif 'all' in file:
+        elif 'all' in file_:
             source = 'GO'
         else:
             source = 'unknown'

@@ -59,7 +59,7 @@ class GeneInteractionDataTest(TestCase):
 
         # Test doc count
         doc_count = DataIntegrityUtils.get_docs_count(idx, idx_type)
-        self.assertGreater(doc_count, 23000, 'Gene doc count greater than 60000')
+        self.assertGreater(doc_count, 23000, 'Gene doc count greater than 23000')
 
         # Get interaction doc - passing the interaction source and id . Also test with random id
         (child_doc_bioplex, parent_doc_bioplex) = self.get_interaction_doc("bioplex", parent_id="ENSG00000164933")
