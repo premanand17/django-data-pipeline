@@ -35,7 +35,7 @@ class LDTest(TestCase):
         ext = "/ld/human/%s?population_name=1000GENOMES:phase_3:%s&r2=0.8" % (m1, pop)
         ens_lds = requests.get(server+ext, headers={"Content-Type": "application/json"}).json()
         if 'error' in ens_lds:
-            logger.warn(m1+' :: '+ens_lds['error'])
+            logger.warning(m1+' :: '+ens_lds['error'])
             return
 
         for ld in lds:
