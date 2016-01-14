@@ -17,7 +17,8 @@ class LDTest(TestCase):
 
     def test_ld_list_population(self):
         ''' Test data from the restful LD server against the Ensembl restful
-        LD interface (http://rest.ensembl.org/documentation/info/ld_id_get). '''
+        LD interface (http://rest.ensembl.org/documentation/info/ld_id_get) for a
+        random sub-population and random marker. '''
         m1 = self._get_random_marker()
         populations = ['CEU', 'TSI', 'FIN', 'GBR', 'IBS']
         pop = populations[randint(0, len(populations)-1)]
@@ -55,8 +56,8 @@ class LDTest(TestCase):
             logger.warning("DIFFERENCE IN LD FOR "+m1)
 
     def _get_random_marker(self):
+        ''' Get a random marker from the dbSNP elastic index. '''
         (idx, idx_type) = ElasticSettings.idx('MARKER', 'MARKER').split('/')
-
         seqid = random.randint(1, 10)
         qbool = BoolQuery(must_arr=[Query.term("seqid", seqid), RangeQuery("tags.weight", gte=80)])
         doc = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=qbool, sources=['id', 'start'], size=1)[0]
