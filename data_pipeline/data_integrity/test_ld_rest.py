@@ -27,7 +27,7 @@ class LDTest(TestCase):
         json_content = json.loads(response.content.decode("utf-8"))[0]
 
         if 'error' in json_content and json_content['error'] is not None:
-            logger.warn(m1+' :: '+json_content['error'])
+            logger.warning(m1+' :: '+json_content['error'])
             return
         lds = json_content['ld']
 
@@ -52,7 +52,7 @@ class LDTest(TestCase):
                     self.assertEqual(dprime_1, dprime_2, m2+' dprime1:'+str(dprime_1)+' '+str(dprime_2))
 
         if len(lds) - len(ens_lds) != 0:
-            logger.warn("DIFFERENCE IN LD FOR "+m1)
+            logger.warning("DIFFERENCE IN LD FOR "+m1)
 
     def _get_random_marker(self):
         (idx, idx_type) = ElasticSettings.idx('MARKER', 'MARKER').split('/')
