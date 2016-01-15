@@ -1,4 +1,4 @@
-''' Data integrity tests for gene index '''
+''' Data integrity tests for region index '''
 from django.test import TestCase
 from elastic.elastic_settings import ElasticSettings
 import logging
