@@ -13,7 +13,7 @@ class DataIntegrityUtils(object):
 
     @classmethod
     def get_rdm_feature_id(cls, idx, idx_type, qbool=Query.match_all(), sources=[], field=None):
-        ''' Get a random feature id from the indices. '''
+        ''' Get a random feature id from the indices. DEPRECATED USE IN DJANGO-ELASTIC '''
         doc = cls.get_rdm_docs(idx, idx_type, qbool=qbool, sources=sources, size=1)[0]
 
         if field is not None:
@@ -23,7 +23,7 @@ class DataIntegrityUtils(object):
 
     @classmethod
     def get_rdm_docs(cls, idx, idx_type, qbool=Query.match_all(), sources=[], size=1):
-        ''' Get a random doc from the indices. '''
+        ''' Get a random doc from the indices. DEPRECATED USE IN DJANGO-ELASTIC '''
         score_function1 = ScoreFunction.create_score_function('random_score', seed=random.randint(0, 1000000))
 
         search_query = ElasticQuery(FunctionScoreQuery(qbool, [score_function1], boost_mode='replace'),
@@ -36,7 +36,7 @@ class DataIntegrityUtils(object):
 
     @classmethod
     def get_rdm_feature_ids(cls, idx, idx_type, qbool=Query.match_all(), sources=[], field=None, size=1):
-        ''' Get random feature_ids from the indices. '''
+        ''' Get random feature_ids from the indices. DEPRECATED USE IN DJANGO-ELASTIC '''
         docs = cls.get_rdm_docs(idx, idx_type, qbool=qbool, sources=sources, size=size)
 
         ids = []

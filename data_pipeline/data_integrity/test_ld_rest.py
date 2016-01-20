@@ -2,7 +2,7 @@
 from django.test import TestCase
 from django.core.urlresolvers import reverse
 from elastic.query import Query, BoolQuery, RangeQuery
-from data_pipeline.data_integrity.utils import DataIntegrityUtils
+from elastic.utils import ElasticUtils
 from elastic.elastic_settings import ElasticSettings
 from random import randint
 import json
@@ -60,5 +60,5 @@ class LDTest(TestCase):
         (idx, idx_type) = ElasticSettings.idx('MARKER', 'MARKER').split('/')
         seqid = random.randint(1, 10)
         qbool = BoolQuery(must_arr=[Query.term("seqid", seqid), RangeQuery("tags.weight", gte=80)])
-        doc = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=qbool, sources=['id', 'start'], size=1)[0]
+        doc = ElasticUtils.get_rdm_docs(idx, idx_type, qbool=qbool, sources=['id', 'start'], size=1)[0]
         return getattr(doc, 'id')
