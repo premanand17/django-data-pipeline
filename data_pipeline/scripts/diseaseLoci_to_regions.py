@@ -24,7 +24,7 @@ chr_band = '10p15.1'
 tier_cutoff = 2
 build = 38
 
-idx = ElasticSettings.idx('REGIONS')
+idx = ElasticSettings.idx('REGION')
 Delete.docs_by_query(idx, idx_type='region')
 
 def add_region(seqid, region_id, regionName, tier, species, weight, diseases, doc_ids):
