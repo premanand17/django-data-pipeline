@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class RegionDataTest(TestCase):
     '''Region test '''
-    IDX_KEY = 'REGIONS'
+    IDX_KEY = 'REGION'
     IDX_TYPE_KEYS = ['STUDY_HITS', 'DISEASE_LOCUS', 'REGION']
     DOC_COUNTS = {
         'STUDY_HITS': 1760,
