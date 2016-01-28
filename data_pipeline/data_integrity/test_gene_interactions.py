@@ -12,6 +12,7 @@ import zipfile
 import csv
 import data_pipeline
 import os
+from elastic.utils import ElasticUtils
 logger = logging.getLogger(__name__)
 
 TEST_DATA_DIR = os.path.dirname(data_pipeline.__file__) + '/tests/data'
@@ -90,7 +91,7 @@ class GeneInteractionDataTest(TestCase):
             qbool_intact = BoolQuery().should([Query.term("interaction_source", interaction_source)])
 
         # Get random doc or specific if id is passed in query
-        docs_by_geneid = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=qbool_intact, sources=[], size=1)
+        docs_by_geneid = ElasticUtils.get_rdm_docs(idx, idx_type, qbool=qbool_intact, sources=[], size=1)
         doc = docs_by_geneid[0]
 
         # Get parent doc

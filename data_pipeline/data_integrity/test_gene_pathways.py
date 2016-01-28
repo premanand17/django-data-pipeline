@@ -12,6 +12,7 @@ from data_pipeline.helper.gene_pathways import GenePathways
 import re
 from data_pipeline.helper.gene import Gene
 import shutil
+from elastic.utils import ElasticUtils
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ class GenePathwayDataTest(TestCase):
         qbool_pw = BoolQuery().should([Query.term("source", pathway_source)])
 
         # Get random doc or specific if id is passed in query
-        random_doc = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=qbool_pw, sources=[], size=1)
+        random_doc = ElasticUtils.get_rdm_docs(idx, idx_type, qbool=qbool_pw, sources=[], size=1)
         doc = random_doc[0]
 
         return doc
