@@ -392,7 +392,7 @@ class IniParser(object):
     def process_section(self, section_name, section_dir_name, base_dir_path,
                         dir_path='.', section=None, stage=None, config=None):
         ''' Overridden in stage, load, and download. '''
-        raise NotImplementedError("Inheriting class should implement this  method")
+        raise NotImplementedError("Inheriting class should implement this method")
 
     def _is_section_match(self, name, sections):
         ''' Check if a section name marched the comma separated list of sections. '''
