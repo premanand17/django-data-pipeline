@@ -37,7 +37,7 @@ class Stage(IniParser):
             return False
 
         if not os.path.exists(download_file):
-            logger.error('File does not exist: '+download_file)
+            logger.warning('File does not exist: '+download_file)
             return False
         logger.debug('Process: '+download_file)
         return True
