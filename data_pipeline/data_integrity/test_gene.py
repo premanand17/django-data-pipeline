@@ -5,6 +5,7 @@ import logging
 from elastic.query import Query
 import re
 from data_pipeline.data_integrity.utils import DataIntegrityUtils
+from elastic.utils import ElasticUtils
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +20,7 @@ class GeneDataTest(TestCase):
         idx = ElasticSettings.idx(idx_key, idx_type_key)
         (idx, idx_type) = idx.split('/')
 
-        docs_by_geneid = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=Query.match_all(), sources=[], size=1)
+        docs_by_geneid = ElasticUtils.get_rdm_docs(idx, idx_type, qbool=Query.match_all(), sources=[], size=1)
 
         # "_source":{"symbol": "RP11-376M2.2", "start": 42975689, "biotype": "sense_intronic", "chromosome": "17",
         # "source": "havana", "strand": "-", "stop": 42977275}
