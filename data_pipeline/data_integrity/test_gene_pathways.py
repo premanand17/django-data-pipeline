@@ -6,7 +6,6 @@ import data_pipeline
 import os
 from data_pipeline.download import HTTPDownload
 from elastic.elastic_settings import ElasticSettings
-from data_pipeline.data_integrity.utils import DataIntegrityUtils
 from elastic.query import BoolQuery, Query
 from data_pipeline.helper.gene_pathways import GenePathways
 import re
@@ -55,7 +54,7 @@ class GenePathwayDataTest(TestCase):
         (idx, idx_type) = idx.split('/')
 
         # Test doc count
-        doc_count = DataIntegrityUtils.get_docs_count(idx, idx_type)
+        doc_count = ElasticUtils.get_docs_count(idx, idx_type)
         self.assertGreater(doc_count, 2500, 'Gene doc count greater than 2500')
 
         # Get pathway doc - passing the pathway source (kegg, reactome, biocarta, go) and id . Also test with random id
