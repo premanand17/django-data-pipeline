@@ -59,7 +59,7 @@ class GeneInteractionDataTest(TestCase):
         (idx, idx_type) = idx.split('/')
 
         # Test doc count
-        doc_count = DataIntegrityUtils.get_docs_count(idx, idx_type)
+        doc_count = ElasticUtils.get_docs_count(idx, idx_type)
         self.assertGreater(doc_count, 23000, 'Gene doc count greater than 23000')
 
         # Get interaction doc - passing the interaction source and id . Also test with random id

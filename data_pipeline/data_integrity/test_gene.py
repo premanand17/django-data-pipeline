@@ -75,5 +75,5 @@ class GeneDataTest(TestCase):
         idx = ElasticSettings.idx(idx_key, idx_type_key)
         (idx, idx_type) = idx.split('/')
 
-        doc_count = DataIntegrityUtils.get_docs_count(idx, idx_type)
+        doc_count = ElasticUtils.get_docs_count(idx, idx_type)
         self.assertGreater(doc_count, 60000, 'Gene doc count greater than 60000')
