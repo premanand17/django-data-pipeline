@@ -4,7 +4,7 @@ from elastic.elastic_settings import ElasticSettings
 import logging
 from elastic.query import Query
 from elastic.search import Search, ElasticQuery
-from data_pipeline.data_integrity.utils import DataIntegrityUtils
+from elastic.utils import ElasticUtils
 from region import utils
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class RegionDataTest(TestCase):
             idx = ElasticSettings.idx(RegionDataTest.IDX_KEY, idx_type_key)
             (idx, idx_type) = idx.split('/')
 
-            docs = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=Query.match_all(), sources=[], size=1)
+            docs = ElasticUtils.get_rdm_docs(idx, idx_type, qbool=Query.match_all(), sources=[], size=1)
 
     def test_docs_count(self):
         '''Check the number of docs in a given index/index-type'''
@@ -35,7 +35,7 @@ class RegionDataTest(TestCase):
             idx = ElasticSettings.idx(RegionDataTest.IDX_KEY, idx_type_key)
             (idx, idx_type) = idx.split('/')
 
-            doc_count = DataIntegrityUtils.get_docs_count(idx, idx_type)
+            doc_count = ElasticUtils.get_docs_count(idx, idx_type)
             self.assertEqual(doc_count, RegionDataTest.DOC_COUNTS[idx_type_key],
                              "Count of docs in the "+idx_type_key+" index are correct")
 
@@ -43,7 +43,7 @@ class RegionDataTest(TestCase):
         ''' test region attributes '''
         idx = ElasticSettings.idx(RegionDataTest.IDX_KEY, 'REGION')
         (idx, idx_type) = idx.split('/')
-        docs = DataIntegrityUtils.get_rdm_docs(idx, idx_type, qbool=Query.match_all(), sources=[], size=1)
+        docs = ElasticUtils.get_rdm_docs(idx, idx_type, qbool=Query.match_all(), sources=[], size=1)
         newRegion = utils.Region.pad_region_doc(docs[0])
 
         if len(getattr(newRegion, "genes")) > 0:
