@@ -66,7 +66,7 @@ class GeneInteractionStagingTest(TestCase):
         '''Runs before each of the tests run from this class..creates the tests/data dir'''
         logging.debug('Class setup...' + self.__class__.__name__)
         self.out = StringIO()
-        self.ini_file = os.path.join(os.path.dirname(__file__), 'test_download.ini')
+        self.ini_file = MY_INI_FILE
         self.app_data_dir = os.path.dirname(data_pipeline.__file__)
         self.test_data_dir = self.app_data_dir + '/tests/data'
         call_command('pipeline', '--steps', 'stage', sections='INTACT',
