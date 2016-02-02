@@ -45,7 +45,7 @@ class IndexLoad(IniParser):
         for stage_file in stage_files:
 
             if not os.path.exists(stage_file):
-                logger.error('File does not exist: '+stage_file)
+                logger.warning('File does not exist: '+stage_file)
                 return
 
             logger.debug('Loading: '+stage_file + ' into ' + section['index'])
