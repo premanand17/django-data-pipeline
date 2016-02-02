@@ -18,6 +18,7 @@ from data_pipeline.helper.gene_pathways import GenePathways
 from builtins import classmethod
 from django.core.management import call_command
 from data_pipeline.helper.marker import ImmunoChip
+from data_pipeline.helper.bands import Bands, Chrom
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +139,7 @@ class PostProcess(object):
                     download_file = os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name,
                                                  f.strip())
                     download_files.append(download_file)
-                    print(download_files)
+                    logging.debug(download_files)
                 return download_files
             else:
                 return os.path.join(base_dir_path, 'DOWNLOAD', section_dir_name, section['files'])
@@ -237,6 +238,26 @@ class PostProcess(object):
         ImmunoChip.ic_mapping(idx, idx_type)
         with open(download_file, 'rt') as ic_f:
             ImmunoChip.immunochip_mysql_2_idx(ic_f, idx, idx_type)
+
+    ''' cyto bands methods '''
+    @classmethod
+    def bands(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        Bands.mapping(idx, idx_type)
+        with gzip.open(download_file, 'rt') as bands_f:
+            Bands.idx(bands_f, idx, idx_type)
+
+    ''' cyto bands methods '''
+    @classmethod
+    def chrom(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        Chrom.mapping(idx, idx_type)
+        with gzip.open(download_file, 'rt') as bands_f:
+            Chrom.idx(bands_f, idx, idx_type)
 
     ''' Publication methods '''
     @classmethod

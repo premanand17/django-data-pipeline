@@ -45,6 +45,8 @@ class Command(BaseCommand):
 
     ./manage.py pipeline --dir tmp --ini download.ini  --sections IMMUNOCHIP_MYSQL --steps load
 
+    Cytobands:
+    ./manage.py pipeline --dir tmp --ini download.ini --sections BANDS_CHROM,BANDS_CYTO --steps download load
     '''
     help = "Download data file(s)"
 
