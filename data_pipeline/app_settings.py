@@ -7,5 +7,12 @@ ELASTIC = {
             'BAND': {'type': 'bands'},
             'CHROM': {'type': 'chromosome'}
         }
+    },
+    'HAPMAP': {
+        'name': 'hapmap_phase2_b38',
+        'idx_type': {
+            'HAPMAP': {'type': 'hapmap', 'auth_public': True}
+        },
+        'auth_public': True
     }
 }
