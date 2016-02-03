@@ -5,7 +5,8 @@ from data_pipeline.download import HTTPDownload, FTPDownload
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin
 from elastic.query import Query, BoolQuery, Filter
-from elastic.search import ElasticQuery, Search
+from elastic.result import Document
+from elastic.search import ElasticQuery, Search, ScanAndScroll
 from elastic.elastic_settings import ElasticSettings
 import data_pipeline
 import logging
@@ -148,3 +149,32 @@ class GenePublicationTest(TestCase):
         pmids_diff = list(pmids - set(pmids_in_idx))
         self.assertLess(len(pmids_diff), GenePublicationTest.NUM_DIFF)
         os.remove(download_file)
+
+
+class CuratedPublicationTest(TestCase):
+    '''Curated publication tests. '''
+
+    def test_region_pubs(self):
+        hits_idx = ElasticSettings.idx('REGION', 'STUDY_HITS')
+
+        def get_pmids(resp_json):
+            pmids = []
+            for hit in resp_json['hits']['hits']:
+                doc = Document(hit)
+                pmids.append(getattr(doc, "pmid"))
+
+            pmids = list(set(pmids))
+            elastic = Search(search_query=ElasticQuery(BoolQuery(b_filter=Filter(Query.ids(pmids))),
+                                                       sources=['pmid']),
+                             idx=ElasticSettings.idx('PUBLICATION'), size=len(pmids)*2)
+
+            if len(pmids) != elastic.get_count()['count']:
+                # check for differences in pmids
+                docs = elastic.search().docs
+                pmids_in_pub_idx = [getattr(doc, 'pmid') for doc in docs]
+                pmids_diff = list(set(pmids) - set(pmids_in_pub_idx))
+                self.assertListEqual([], pmids_diff, "PMIDs list empty ("+str(pmids_diff)+")")
+
+            self.assertEqual(len(pmids), elastic.get_count()['count'], 'Count for region publications')
+
+        ScanAndScroll.scan_and_scroll(idx=hits_idx, call_fun=get_pmids, time_to_keep_scoll=1)

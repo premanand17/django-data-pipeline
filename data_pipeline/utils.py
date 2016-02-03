@@ -1,24 +1,28 @@
 ''' Helper functions and classes '''
-import os
+from builtins import classmethod
 import configparser
-import time
-import xml.etree.ElementTree as ET
-
-from elastic.search import Search, ElasticQuery
-from elastic.query import Query, TermsFilter
-from .helper.pubs import Pubs
-import json
-from elastic.management.loaders.loader import Loader
-import re
 import gzip
+import json
 import logging
+import os
+import re
+import time
+
+from django.core.management import call_command
+
+from data_pipeline.helper.bands import Bands, Chrom
+from data_pipeline.helper.recombination_rates import RecombinationRates
 from data_pipeline.helper.gene import Gene
 from data_pipeline.helper.gene_interactions import GeneInteractions
 from data_pipeline.helper.gene_pathways import GenePathways
-from builtins import classmethod
-from django.core.management import call_command
 from data_pipeline.helper.marker import ImmunoChip
-from data_pipeline.helper.bands import Bands, Chrom
+from elastic.management.loaders.loader import Loader
+from elastic.query import Query, TermsFilter
+from elastic.search import Search, ElasticQuery
+import xml.etree.ElementTree as ET
+
+from .helper.pubs import Pubs
+
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +263,16 @@ class PostProcess(object):
         with gzip.open(download_file, 'rt') as bands_f:
             Chrom.idx(bands_f, idx, idx_type)
 
+    ''' hapmap recombination method '''
+    @classmethod
+    def recombination(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx_type = kwargs['section']['index_type']
+        idx = kwargs['section']['index']
+        RecombinationRates.mapping(idx, idx_type)
+        with gzip.open(download_file, 'rb') as f:
+            RecombinationRates.idx(f, idx, idx_type)
+
     ''' Publication methods '''
     @classmethod
     def get_new_pmids(cls, pmids, idx, disease_code=None):
@@ -413,7 +427,7 @@ class IniParser(object):
     def process_section(self, section_name, section_dir_name, base_dir_path,
                         dir_path='.', section=None, stage=None, config=None):
         ''' Overridden in stage, load, and download. '''
-        raise NotImplementedError("Inheriting class should implement this  method")
+        raise NotImplementedError("Inheriting class should implement this method")
 
     def _is_section_match(self, name, sections):
         ''' Check if a section name marched the comma separated list of sections. '''
