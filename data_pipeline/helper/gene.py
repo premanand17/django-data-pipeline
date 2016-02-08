@@ -228,6 +228,7 @@ class Gene(object):
         genes = {}
         homologs = [a.strip().replace('_homolog_ensembl_gene', '') for a in attrs.split(',')
                     if a.strip() != 'ensembl_gene_id']
+
         for ensmart in ensmart_f:
             parts = ensmart.split('\t')
             ens_id = parts[0]
@@ -235,7 +236,7 @@ class Gene(object):
                 logger.warn('IGNORE ORTHOLOGS '+ens_id+' :: '+ensmart)
                 continue
             dbxrefs = {}
-            for i in range(len(parts)):
+            for i in range(1, len(parts)):
                 if parts[i].strip() != '':
                     dbxrefs[homologs[i-1]] = {"ensembl": parts[i].strip()}
             if len(dbxrefs) > 0:
