@@ -1,11 +1,16 @@
 ''' Data integrity tests for gene index '''
-from django.test import TestCase
-from elastic.elastic_settings import ElasticSettings
 import logging
-from elastic.query import Query
 import re
+
+from django.test import TestCase
+
 from data_pipeline.data_integrity.utils import DataIntegrityUtils
+from elastic.elastic_settings import ElasticSettings
+from elastic.query import Query
+from elastic.search import ScanAndScroll, ElasticQuery
 from elastic.utils import ElasticUtils
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,3 +82,22 @@ class GeneDataTest(TestCase):
 
         doc_count = ElasticUtils.get_docs_count(idx, idx_type)
         self.assertGreater(doc_count, 60000, 'Gene doc count greater than 60000')
+
+    def test_homologs(self):
+        idx = ElasticSettings.idx('GENE', 'GENE')
+        (idx, idx_type) = idx.split('/')
+
+        '''  search for the entrez ids '''
+        def process_hits(resp_json):
+            hits = resp_json['hits']['hits']
+            for hit in hits:
+                dbxrefs = hit['_source']['dbxrefs']
+                if 'orthologs' in dbxrefs:
+                    if 'rnorvegicus' in dbxrefs['orthologs']:
+                        self.assertTrue(dbxrefs['orthologs']['rnorvegicus']['ensembl'].startswith('ENSRNOG'),
+                                        dbxrefs['orthologs']['rnorvegicus'])
+                    if 'mmusculus' in dbxrefs['orthologs']:
+                        self.assertTrue(dbxrefs['orthologs']['mmusculus']['ensembl'].startswith('ENSMUSG'),
+                                        dbxrefs['orthologs']['mmusculus'])
+        query = ElasticQuery(Query.match_all(), sources=['dbxrefs'])
+        ScanAndScroll.scan_and_scroll(idx, idx_type=idx_type, call_fun=process_hits, query=query)
