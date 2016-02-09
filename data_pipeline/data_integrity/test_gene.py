@@ -83,7 +83,7 @@ class GeneDataTest(TestCase):
         doc_count = ElasticUtils.get_docs_count(idx, idx_type)
         self.assertGreater(doc_count, 60000, 'Gene doc count greater than 60000')
 
-    def test_homologs(self):
+    def test_dbxrefs(self):
         idx = ElasticSettings.idx('GENE', 'GENE')
         (idx, idx_type) = idx.split('/')
 
@@ -92,6 +92,11 @@ class GeneDataTest(TestCase):
             hits = resp_json['hits']['hits']
             for hit in hits:
                 dbxrefs = hit['_source']['dbxrefs']
+
+                if dbxrefs['ensembl'] == 'ENSG00000134242':  # PTPN22 orthologs
+                    self.assertEqual(dbxrefs['orthologs']['mmusculus']['ensembl'], 'ENSMUSG00000027843')
+                    self.assertEqual(dbxrefs['orthologs']['rnorvegicus']['ensembl'], 'ENSRNOG00000019614')
+
                 if 'orthologs' in dbxrefs:
                     if 'rnorvegicus' in dbxrefs['orthologs']:
                         self.assertTrue(dbxrefs['orthologs']['rnorvegicus']['ensembl'].startswith('ENSRNOG'),
