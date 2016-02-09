@@ -11,11 +11,12 @@ import time
 from django.core.management import call_command
 
 from data_pipeline.helper.bands import Bands, Chrom
-from data_pipeline.helper.recombination_rates import RecombinationRates
+from data_pipeline.helper.disease import Disease
 from data_pipeline.helper.gene import Gene
 from data_pipeline.helper.gene_interactions import GeneInteractions
 from data_pipeline.helper.gene_pathways import GenePathways
 from data_pipeline.helper.marker import ImmunoChip
+from data_pipeline.helper.recombination_rates import RecombinationRates
 from elastic.management.loaders.loader import Loader
 from elastic.query import Query, TermsFilter
 from elastic.search import Search, ElasticQuery
@@ -262,6 +263,16 @@ class PostProcess(object):
         Chrom.mapping(idx, idx_type)
         with gzip.open(download_file, 'rt') as bands_f:
             Chrom.idx(bands_f, idx, idx_type)
+
+    ''' disease '''
+    @classmethod
+    def disease(cls, *args, **kwargs):
+        download_file = cls._get_download_file(*args, **kwargs)
+        idx = kwargs['section']['index']
+        idx_type = kwargs['section']['index_type']
+        Disease.mapping(idx, idx_type)
+        with open(download_file, 'rt') as bands_f:
+            Disease.idx(bands_f, idx, idx_type)
 
     ''' hapmap recombination method '''
     @classmethod
