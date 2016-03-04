@@ -1,1 +1,1 @@
--e git+http://github.com/D-I-L/django-elastic.git#egg=elastic
+-e git+https://github.com/D-I-L/django-elastic.git#egg=elastic
