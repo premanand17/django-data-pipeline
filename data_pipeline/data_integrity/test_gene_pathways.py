@@ -60,9 +60,21 @@ class GenePathwayDataTest(TestCase):
         # Get pathway doc - passing the pathway source (kegg, reactome, biocarta, go) and id . Also test with random id
         pathway_doc_kegg = self.get_pathway_doc("kegg")
         logger.debug(pathway_doc_kegg.__dict__)
-        self.check_kegg_data(pathway_doc_kegg)
+        self.check_pathway_data(pathway_doc_kegg, "kegg")
 
-    def check_kegg_data(self, pathway_doc):
+        pathway_doc_biocarta = self.get_pathway_doc("biocarta")
+        logger.debug(pathway_doc_biocarta.__dict__)
+        self.check_pathway_data(pathway_doc_biocarta, "biocarta")
+
+        pathway_doc_reactome = self.get_pathway_doc("reactome")
+        logger.debug(pathway_doc_reactome.__dict__)
+        self.check_pathway_data(pathway_doc_reactome, "reactome")
+
+        pathway_doc_go = self.get_pathway_doc("go")
+        logger.debug(pathway_doc_go.__dict__)
+        self.check_pathway_data(pathway_doc_go, "GO")
+
+    def check_pathway_data(self, pathway_doc, psource=None):
         # get the attributes from elastic doc
         pw_name_es = getattr(pathway_doc, 'pathway_name')
         pw_url_es = getattr(pathway_doc, 'pathway_url')
@@ -77,8 +89,7 @@ class GenePathwayDataTest(TestCase):
         for file_ in download_files:
             file_ = file_.replace(' ', '')
             source = GenePathways._get_pathway_source(file_)
-            print(source)
-            if source == 'kegg':
+            if source == psource:
                 source_file = file_
                 break
 
@@ -89,6 +100,7 @@ class GenePathwayDataTest(TestCase):
         pw_url_kegg = None
         pw_gene_sets_kegg = []
         if os.path.isfile(TEST_DATA_DIR + '/' + source_file):
+            print(TEST_DATA_DIR + '/' + source_file)
             with open(TEST_DATA_DIR + '/' + source_file, "r") as data:
                 for line in data:
                     if re.search(my_regex, line):

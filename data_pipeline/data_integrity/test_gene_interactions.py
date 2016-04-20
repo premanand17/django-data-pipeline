@@ -96,6 +96,7 @@ class GeneInteractionDataTest(TestCase):
 
         # Get parent doc
         parent_id = doc.parent()
+        logger.debug('parent_id : ' + parent_id)
         parent_docs = DataIntegrityUtils.fetch_from_elastic(idx_key, parent_idx_key, [parent_id])
 
         if parent_docs:
