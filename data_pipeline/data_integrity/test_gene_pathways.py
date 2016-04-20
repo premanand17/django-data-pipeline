@@ -100,7 +100,7 @@ class GenePathwayDataTest(TestCase):
         pw_url_kegg = None
         pw_gene_sets_kegg = []
         if os.path.isfile(TEST_DATA_DIR + '/' + source_file):
-            print(TEST_DATA_DIR + '/' + source_file)
+
             with open(TEST_DATA_DIR + '/' + source_file, "r") as data:
                 for line in data:
                     if re.search(my_regex, line):
